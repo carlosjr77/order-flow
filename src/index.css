@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Quintal Barra Design System
+   Primary: Golden Orange (#ad8f53 / HSL ~40 51% 50%)
+   Background Dark: Deep Brown (#1a1510 / HSL ~30 27% 8%)
+   Text Light: Warm White
+*/
+
+@layer base {
+  :root {
+    --background: 40 20% 98%;
+    --foreground: 30 27% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 30 27% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 30 27% 8%;
+
+    --primary: 40 51% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 15% 92%;
+    --secondary-foreground: 30 27% 15%;
+
+    --muted: 30 15% 95%;
+    --muted-foreground: 30 10% 45%;
+
+    --accent: 40 51% 95%;
+    --accent-foreground: 40 51% 30%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 27% 8%;
+
+    --border: 30 15% 88%;
+    --input: 30 15% 88%;
+    --ring: 40 51% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 30 27% 8%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 40 51% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 51% 20%;
+    --sidebar-accent-foreground: 40 51% 90%;
+    --sidebar-border: 30 20% 18%;
+    --sidebar-ring: 40 51% 50%;
+  }
+
+  .dark {
+    --background: 30 27% 8%;
+    --foreground: 40 20% 95%;
+
+    --card: 30 20% 12%;
+    --card-foreground: 40 20% 95%;
+
+    --popover: 30 20% 12%;
+    --popover-foreground: 40 20% 95%;
+
+    --primary: 40 51% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 20% 18%;
+    --secondary-foreground: 40 20% 90%;
+
+    --muted: 30 20% 18%;
+    --muted-foreground: 40 15% 60%;
+
+    --accent: 40 51% 20%;
+    --accent-foreground: 40 51% 90%;
+
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 30 27% 8%;
+
+    --border: 30 20% 18%;
+    --input: 30 20% 18%;
+    --ring: 40 51% 50%;
+
+    --sidebar-background: 30 27% 6%;
+    --sidebar-foreground: 40 20% 95%;
+    --sidebar-primary: 40 51% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 51% 15%;
+    --sidebar-accent-foreground: 40 51% 90%;
+    --sidebar-border: 30 20% 15%;
+    --sidebar-ring: 40 51% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Playfair Display', serif;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Playfair Display', serif;
+  }
+  
+  .font-body {
+    font-family: 'Inter', sans-serif;
+  }
+}

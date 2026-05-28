@@ -1,0 +1,37 @@
+# Frontend Dockerfile - Node.js + React + Vite
+FROM node:20-alpine as builder
+
+WORKDIR /app
+
+# Copiar package files
+COPY package.json package-lock.json* bun.lockb* ./
+
+# Instalar dependências
+RUN npm install
+
+# Copiar código
+COPY . .
+
+# Build da aplicação
+RUN npm run build
+
+# Stage de produção - servidor simples
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Instalar serve para servir arquivos estáticos
+RUN npm install -g serve
+
+# Copiar arquivos construídos do builder
+COPY --from=builder /app/dist ./dist
+
+# Expor porta
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget --quiet --tries=1 --spider http://localhost:3000 || exit 1
+
+# Servir aplicação
+CMD ["serve", "-s", "dist", "-l", "3000"]

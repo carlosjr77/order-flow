@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Banco de Dados PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: orderflow-db
+    environment:
+      POSTGRES_USER: orderflow_user
+      POSTGRES_PASSWORD: orderflow_password
+      POSTGRES_DB: ordem_vendas
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderflow_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - orderflow-network
+
+  # Backend FastAPI
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: orderflow-backend
+    environment:
+      DATABASE_URL: postgresql://orderflow_user:orderflow_password@db:5432/ordem_vendas
+      SQLALCHEMY_DATABASE_URL: postgresql://orderflow_user:orderflow_password@db:5432/ordem_vendas
+      JWT_SECRET_KEY: your-secret-key-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    networks:
+      - orderflow-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend React
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: orderflow-frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - orderflow-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Nginx - Reverse Proxy (Opcional, para produção)
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: orderflow-nginx
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - backend
+  #     - frontend
+  #   networks:
+  #     - orderflow-network
+
+volumes:
+  postgres_data:
+
+networks:
+  orderflow-network:
+    driver: bridge
