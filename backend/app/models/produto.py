@@ -15,6 +15,7 @@ class Produto(Base):
     estoque_atual = Column(Numeric(10, 3), nullable=False, default=0)
     unidade_medida = Column(String(10), nullable=False, default="UN")  # KG, UN, LT, cx, etc
     ncm = Column(String(8), nullable=True)  # Código NCM
+    vender_sem_estoque = Column(Integer, nullable=False, default=1)  # 1=permite vender sem estoque (default), 0=nao permite
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     

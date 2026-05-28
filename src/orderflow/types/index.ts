@@ -24,6 +24,7 @@ export interface Produto {
   estoque_atual: number;
   unidade_medida: string;
   ncm?: string;
+  vender_sem_estoque: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +35,9 @@ export interface ItemCarrinho {
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
+  codigo_interno?: string;
+  unidade_medida?: string;
+  ncm?: string;
 }
 
 export interface ItemVenda {
@@ -43,12 +47,17 @@ export interface ItemVenda {
   quantidade: number;
   valor_unitario: number;
   valor_total: number;
+  codigo_interno?: string;
+  descricao?: string;
+  unidade_medida?: string;
+  ncm?: string;
 }
 
 export interface Venda {
   id: number;
   data_venda: string;
   valor_total: number;
+  valor_frete?: number;
   status: 'pendente' | 'concluído' | 'cancelado';
   forma_pagamento?: string;
   observacoes?: string;

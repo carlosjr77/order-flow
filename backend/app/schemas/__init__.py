@@ -41,10 +41,11 @@ class ProdutoBase(BaseModel):
     preco_venda: float
     unidade_medida: str = "UN"
     ncm: Optional[str] = None
+    vender_sem_estoque: bool = True  # Default: permite vender sem estoque
 
 
 class ProdutoCreate(ProdutoBase):
-    pass
+    estoque_inicial: Optional[float] = 0  # Campo para definir estoque inicial no cadastro
 
 
 class ProdutoUpdate(BaseModel):
@@ -53,6 +54,7 @@ class ProdutoUpdate(BaseModel):
     preco_venda: Optional[float] = None
     unidade_medida: Optional[str] = None
     ncm: Optional[str] = None
+    vender_sem_estoque: Optional[bool] = None
 
 
 class ProdutoResponse(ProdutoBase):
@@ -79,6 +81,10 @@ class ItemVendaResponse(ItemVendaBase):
     id: int
     venda_id: int
     valor_total: float
+    codigo_interno: Optional[str] = None
+    descricao: Optional[str] = None
+    unidade_medida: Optional[str] = None
+    ncm: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -86,6 +92,7 @@ class ItemVendaResponse(ItemVendaBase):
 
 class VendaBase(BaseModel):
     valor_total: float
+    valor_frete: Optional[float] = 0
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
 
@@ -94,6 +101,7 @@ class VendaCreate(BaseModel):
     itens: list[ItemVendaBase]
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
+    valor_frete: Optional[float] = 0
 
 
 class VendaResponse(VendaBase):
@@ -109,3 +117,44 @@ class VendaResponse(VendaBase):
 
 class VendaDetailResponse(VendaResponse):
     itens: list[ItemVendaResponse]
+
+
+class EmpresaBase(BaseModel):
+    nome: str
+    cnpj: str
+    endereco: str
+    numero: str
+    complemento: Optional[str] = None
+    bairro: str
+    cidade: str
+    estado: str
+    cep: str
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+
+
+class EmpresaCreate(EmpresaBase):
+    pass
+
+
+class EmpresaUpdate(BaseModel):
+    nome: Optional[str] = None
+    cnpj: Optional[str] = None
+    endereco: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+    telefone: Optional[str] = None
+    email: Optional[str] = None
+
+
+class EmpresaResponse(EmpresaBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

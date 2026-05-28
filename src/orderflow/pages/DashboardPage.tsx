@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout } = useAuth();
@@ -72,8 +72,8 @@ export const DashboardPage: React.FC = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Order Flow</h1>
-            <p className="text-sm text-gray-600">aaaaaBem-vindo, {usuario?.username}!</p>
+            <h1 className="text-3xl font-bold text-gray-900">Gestão de Vendas</h1>
+            <p className="text-sm text-gray-600">Bem-vindo, {usuario?.username}!</p>
           </div>
           <Button
             onClick={handleLogout}
@@ -146,11 +146,11 @@ export const DashboardPage: React.FC = () => {
             color="bg-purple-50 hover:bg-purple-100"
           />
           <QuickAccessCard
-            title="Importar Notas"
-            description="Via OCR de imagem/PDF"
-            icon={<Package className="w-8 h-8" />}
-            onClick={() => navigate('/importar-notas')}
-            color="bg-orange-50 hover:bg-orange-100"
+            title="Dados da Empresa"
+            description="Configurar empresa"
+            icon={<Settings className="w-8 h-8" />}
+            onClick={() => navigate('/empresa')}
+            color="bg-indigo-50 hover:bg-indigo-100"
           />
         </div>
       </main>

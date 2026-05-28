@@ -43,7 +43,7 @@ def obter_venda(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Obtém uma venda específica"""
+    """Obtém uma venda específica com dados completos dos produtos"""
     venda = db.query(Venda).filter(Venda.id == venda_id).first()
     
     if not venda:
@@ -52,11 +52,24 @@ def obter_venda(
             detail="Venda não encontrada"
         )
     
-    itens = db.query(ItemVenda).filter(ItemVenda.venda_id == venda_id).all()
+    # Buscar itens com dados do produto
+    itens = db.query(ItemVenda, Produto).join(
+        Produto, ItemVenda.produto_id == Produto.id
+    ).filter(ItemVenda.venda_id == venda_id).all()
+    
+    # Formatando itens com dados do produto
+    itens_formatados = []
+    for item, produto in itens:
+        item_dict = {column.name: getattr(item, column.name) for column in item.__table__.columns}
+        item_dict['codigo_interno'] = produto.codigo_interno
+        item_dict['descricao'] = produto.descricao
+        item_dict['unidade_medida'] = produto.unidade_medida
+        item_dict['ncm'] = produto.ncm
+        itens_formatados.append(item_dict)
     
     return {
         **{column.name: getattr(venda, column.name) for column in venda.__table__.columns},
-        "itens": itens
+        "itens": itens_formatados
     }
 
 
@@ -74,14 +87,16 @@ def criar_venda(
             detail="Venda deve ter pelo menos um item"
         )
     
-    # Calcular valor total
+    # Calcular value total
     valor_total = Decimal("0")
+    valor_frete = Decimal(str(venda_data.valor_frete or 0))
     
     # Criar venda
     nova_venda = Venda(
         status="pendente",
         forma_pagamento=venda_data.forma_pagamento,
-        observacoes=venda_data.observacoes
+        observacoes=venda_data.observacoes,
+        valor_frete=valor_frete
     )
     
     db.add(nova_venda)
@@ -97,14 +112,16 @@ def criar_venda(
                 detail=f"Produto {item.produto_id} não encontrado"
             )
         
-        if produto.estoque_atual < item.quantidade:
+        # Verificar estoque apenas se produto nao permitir venda sem estoque
+        if produto.estoque_atual < item.quantidade and not produto.vender_sem_estoque:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Estoque insuficiente para {produto.descricao}. Disponível: {produto.estoque_atual}"
             )
         
-        # Reduzir estoque
-        produto.estoque_atual -= Decimal(str(item.quantidade))
+        # Reduzir estoque (apenas se tiver estoque e nao estiver vendendo sem estoque)
+        if produto.estoque_atual >= item.quantidade:
+            produto.estoque_atual -= Decimal(str(item.quantidade))
         
         # Criar item de venda
         valor_total_item = Decimal(str(item.quantidade)) * Decimal(str(item.valor_unitario))
@@ -120,8 +137,8 @@ def criar_venda(
         db.add(item_venda)
         valor_total += valor_total_item
     
-    # Atualizar valor total da venda
-    nova_venda.valor_total = valor_total
+    # Atualizar value total da venda (incluindo frete)
+    nova_venda.valor_total = valor_total + valor_frete
     
     db.commit()
     db.refresh(nova_venda)

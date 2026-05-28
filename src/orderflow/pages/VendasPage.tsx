@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { Venda } from '../types';
+import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, DownloadCloud } from 'lucide-react';
+import { ArrowLeft, Eye, DownloadCloud, Printer } from 'lucide-react';
 import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
 
 export const VendasPage: React.FC = () => {
@@ -12,10 +12,38 @@ export const VendasPage: React.FC = () => {
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<Venda | null>(null);
+  const [empresaDados, setEmpresaDados] = useState<DadosEmpresa | null>(null);
+
+  // Dados padrão em caso de nenhuma empresa cadastrada
+  const dadosEmpresaPadrao: DadosEmpresa = {
+    nome: 'Sua Empresa LTDA',
+    cnpj: '00.000.000/0000-00',
+    endereco: 'Rua Exemplo',
+    numero: '123',
+    bairro: 'Centro',
+    cidade: 'São Paulo',
+    estado: 'SP',
+    cep: '01000-000',
+  };
 
   useEffect(() => {
+    loadEmpresaDados();
     loadVendas();
   }, []);
+
+  const loadEmpresaDados = async () => {
+    try {
+      const dados = await apiClient.obterDadosEmpresa();
+      if (dados) {
+        setEmpresaDados(dados);
+      } else {
+        setEmpresaDados(null);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados da empresa:', error);
+      setEmpresaDados(null);
+    }
+  };
 
   const loadVendas = async () => {
     try {
@@ -32,16 +60,7 @@ export const VendasPage: React.FC = () => {
   const downloadComprovante = async (venda: Venda) => {
     try {
       const dadosComprovante = {
-        empresa: {
-          nome: 'Sua Empresa LTDA',
-          cnpj: '00.000.000/0000-00',
-          endereco: 'Rua Exemplo',
-          numero: '123',
-          bairro: 'Centro',
-          cidade: 'São Paulo',
-          estado: 'SP',
-          cep: '01000-000',
-        },
+        empresa: empresaDados || dadosEmpresaPadrao,
         venda,
         itens: venda.itens || [],
       };
@@ -198,6 +217,9 @@ export const VendasPage: React.FC = () => {
                 <p className="text-sm"><span className="font-semibold">Data:</span> {new Date(selectedVenda.data_venda).toLocaleDateString('pt-BR')}</p>
                 <p className="text-sm"><span className="font-semibold">Status:</span> {selectedVenda.status}</p>
                 <p className="text-sm"><span className="font-semibold">Pagamento:</span> {selectedVenda.forma_pagamento || '-'}</p>
+                {selectedVenda.valor_frete !== undefined && selectedVenda.valor_frete > 0 && (
+                  <p className="text-sm"><span className="font-semibold">Frete:</span> R$ {selectedVenda.valor_frete.toFixed(2)}</p>
+                )}
               </div>
 
               {selectedVenda.itens && selectedVenda.itens.length > 0 && (
@@ -236,13 +258,22 @@ export const VendasPage: React.FC = () => {
                 </div>
               )}
 
-              <Button
-                onClick={() => setSelectedVenda(null)}
-                variant="outline"
-                className="w-full"
-              >
-                Fechar
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => downloadComprovante(selectedVenda)}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  <Printer className="w-4 h-4 mr-2" />
+                  Imprimir PDF
+                </Button>
+                <Button
+                  onClick={() => setSelectedVenda(null)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Fechar
+                </Button>
+              </div>
             </Card>
           </div>
         )}

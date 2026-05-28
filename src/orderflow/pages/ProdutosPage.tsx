@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
 
 export const ProdutosPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +22,13 @@ export const ProdutosPage: React.FC = () => {
     preco_venda: 0,
     unidade_medida: 'UN',
     ncm: '',
+    estoque_inicial: 0,
+    vender_sem_estoque: true,  // Default: permite vender sem estoque
   });
+  
+  // Estados para valores formatados (para exibição)
+  const [precoCustoFormatado, setPrecoCustoFormatado] = useState('');
+  const [precoVendaFormatado, setPrecoVendaFormatado] = useState('');
 
   useEffect(() => {
     loadProdutos();
@@ -74,7 +81,11 @@ export const ProdutosPage: React.FC = () => {
       preco_venda: produto.preco_venda,
       unidade_medida: produto.unidade_medida,
       ncm: produto.ncm || '',
+      estoque_inicial: produto.estoque_atual,
+      vender_sem_estoque: produto.vender_sem_estoque || false,
     });
+    setPrecoCustoFormatado(produto.preco_custo.toFixed(2).replace('.', ','));
+    setPrecoVendaFormatado(produto.preco_venda.toFixed(2).replace('.', ','));
     setEditingId(produto.id);
     setShowModal(true);
   };
@@ -87,7 +98,11 @@ export const ProdutosPage: React.FC = () => {
       preco_venda: 0,
       unidade_medida: 'UN',
       ncm: '',
+      estoque_inicial: 0,
+      vender_sem_estoque: true,  // Default: permite vender sem estoque
     });
+    setPrecoCustoFormatado('');
+    setPrecoVendaFormatado('');
   };
 
   return (
@@ -216,19 +231,37 @@ export const ProdutosPage: React.FC = () => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Preço Custo*</label>
                   <Input
-                    type="number"
-                    value={formData.preco_custo}
-                    onChange={(e) => setFormData({ ...formData, preco_custo: parseFloat(e.target.value) })}
-                    step="0.01"
+                    type="text"
+                    value={precoCustoFormatado}
+                    onChange={(e) => {
+                      const valor = e.target.value;
+                      setPrecoCustoFormatado(valor);
+                      setFormData({ ...formData, preco_custo: extrairValorMoeda(valor) });
+                    }}
+                    placeholder="0,00"
+                    onBlur={() => {
+                      const valor = precoCustoFormatado.replace(',', '.');
+                      const numerico = parseFloat(valor) || 0;
+                      setPrecoCustoFormatado(numerico.toFixed(2).replace('.', ','));
+                    }}
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Preço Venda*</label>
                   <Input
-                    type="number"
-                    value={formData.preco_venda}
-                    onChange={(e) => setFormData({ ...formData, preco_venda: parseFloat(e.target.value) })}
-                    step="0.01"
+                    type="text"
+                    value={precoVendaFormatado}
+                    onChange={(e) => {
+                      const valor = e.target.value;
+                      setPrecoVendaFormatado(valor);
+                      setFormData({ ...formData, preco_venda: extrairValorMoeda(valor) });
+                    }}
+                    placeholder="0,00"
+                    onBlur={() => {
+                      const valor = precoVendaFormatado.replace(',', '.');
+                      const numerico = parseFloat(valor) || 0;
+                      setPrecoVendaFormatado(numerico.toFixed(2).replace('.', ','));
+                    }}
                   />
                 </div>
               </div>
@@ -255,6 +288,33 @@ export const ProdutosPage: React.FC = () => {
                     placeholder="12345678"
                   />
                 </div>
+              </div>
+
+              {!editingId && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Estoque Inicial</label>
+                  <Input
+                    type="number"
+                    value={formData.estoque_inicial}
+                    onChange={(e) => setFormData({ ...formData, estoque_inicial: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                    min="0"
+                    step="1"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="vender_sem_estoque"
+                  checked={formData.vender_sem_estoque}
+                  onChange={(e) => setFormData({ ...formData, vender_sem_estoque: e.target.checked })}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <label htmlFor="vender_sem_estoque" className="text-sm font-medium text-gray-700">
+                  Permitir venda sem estoque (produto pode ser vendido mesmo com estoque zerado)
+                </label>
               </div>
             </div>
 

@@ -73,7 +73,8 @@ def criar_produto(
         preco_venda=produto_data.preco_venda,
         unidade_medida=produto_data.unidade_medida,
         ncm=produto_data.ncm,
-        estoque_atual=0
+        estoque_atual=produto_data.estoque_inicial or 0,
+        vender_sem_estoque=1 if produto_data.vender_sem_estoque else 0
     )
     
     db.add(novo_produto)

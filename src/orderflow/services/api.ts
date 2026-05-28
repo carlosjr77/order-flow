@@ -135,6 +135,34 @@ export class APIClient {
   async cancelarVenda(id: number) {
     return this.request(`/api/vendas/${id}/cancelar`, 'PUT');
   }
+
+  // Empresas endpoints
+  async listarEmpresas(skip = 0, limit = 100) {
+    const params = new URLSearchParams();
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    return this.request(`/api/empresas?${params}`, 'GET');
+  }
+
+  async obterDadosEmpresa() {
+    return this.request('/api/empresas/dados', 'GET');
+  }
+
+  async obterEmpresa(id: number) {
+    return this.request(`/api/empresas/${id}`, 'GET');
+  }
+
+  async criarEmpresa(data: any) {
+    return this.request('/api/empresas', 'POST', data);
+  }
+
+  async atualizarEmpresa(id: number, data: any) {
+    return this.request(`/api/empresas/${id}`, 'PUT', data);
+  }
+
+  async deletarEmpresa(id: number) {
+    return this.request(`/api/empresas/${id}`, 'DELETE');
+  }
 }
 
 export const apiClient = new APIClient();

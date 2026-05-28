@@ -18,9 +18,56 @@ from app.models.venda import Venda
 from app.models.item_venda import ItemVenda
 from sqlalchemy import text, inspect
 
+def run_migrations():
+    """Executa migrações para adicionar colunas novas"""
+    from sqlalchemy import text
+    from app.core.database import engine
+    
+    with engine.connect() as conn:
+        try:
+            # Adicionar coluna vender_sem_estoque se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'produtos' AND column_name = 'vender_sem_estoque'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                print("🔧 Adicionando coluna 'vender_sem_estoque' na tabela 'produtos'...")
+                conn.execute(text(
+                    "ALTER TABLE produtos ADD COLUMN vender_sem_estoque INTEGER NOT NULL DEFAULT 0"
+                ))
+                conn.commit()
+                print("✅ Coluna 'vender_sem_estoque' adicionada!")
+            else:
+                print("ℹ️ Coluna 'vender_sem_estoque' já existe.")
+            
+            # Adicionar coluna valor_frete se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'vendas' AND column_name = 'valor_frete'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                print("🔧 Adicionando coluna 'valor_frete' na tabela 'vendas'...")
+                conn.execute(text(
+                    "ALTER TABLE vendas ADD COLUMN valor_frete NUMERIC(10,2) DEFAULT 0"
+                ))
+                conn.commit()
+                print("✅ Coluna 'valor_frete' adicionada!")
+            else:
+                print("ℹ️ Coluna 'valor_frete' já existe.")
+                
+        except Exception as e:
+            print(f"⚠️ Erro na migração: {e}")
+            conn.rollback()
+
 def seed_db():
     """Popula o banco com dados iniciais"""
     try:
+        # Executar migrações primeiro
+        print("🔄 Executando migrações do banco de dados...")
+        run_migrations()
+        
         print("⏳ Aguardando tabelas serem criadas...")
         max_retries = 30
         retry_count = 0

@@ -81,12 +81,6 @@ export const LoginPage: React.FC = () => {
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
         </form>
-
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
-          <p className="text-sm text-blue-900 font-semibold mb-2">Credenciais Padrão:</p>
-          <p className="text-sm text-blue-800">Usuário: <span className="font-mono">admin</span></p>
-          <p className="text-sm text-blue-800">Senha: <span className="font-mono">admin123</span></p>
-        </div>
       </Card>
     </div>
   );

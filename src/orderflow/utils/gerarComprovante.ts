@@ -17,6 +17,21 @@ export interface DadosComprovante {
   venda: Venda;
   // Permitindo index signature flexível caso os dados venham do backend com formatos variados
   itens: (ItemVenda & { descricao?: string; ncm?: string; codigo_interno?: string; unidade_medida?: string; produto?: any })[];
+  // Dados opcionais do cliente
+  cliente?: {
+    nome: string;
+    documento: string;
+  } | null;
+  // Dados opcionais de entrega
+  entrega?: {
+    endereco: string;
+    numero: string;
+    complemento?: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+    cep: string;
+  } | null;
 }
 
 // Formatação auxiliar
@@ -151,14 +166,23 @@ export const gerarComprovanteDANFE = (dados: DadosComprovante): jsPDF => {
   drawSectionTitle("DESTINATÁRIO/REMETENTE", y + 2.5);
   y += 3.5; // Espaço do texto do título até a caixa
   
-  drawDanfeBox(m, y, w * 0.65, 7, "NOME/RAZÃO SOCIAL", "CONSUMIDOR FINAL");
-  drawDanfeBox(m + w * 0.65, y, w * 0.20, 7, "CNPJ/CPF", "000.000.000-00");
+  // Usar dados do cliente se preenchido, senão consumidor final
+  const nomeCliente = dados.cliente?.nome || "CONSUMIDOR FINAL";
+  const documentoCliente = dados.cliente?.documento || "000.000.000-00";
+  
+  drawDanfeBox(m, y, w * 0.65, 7, "NOME/RAZÃO SOCIAL", nomeCliente);
+  drawDanfeBox(m + w * 0.65, y, w * 0.20, 7, "CNPJ/CPF", documentoCliente);
   drawDanfeBox(m + w * 0.85, y, w * 0.15, 7, "DATA DA EMISSÃO", dataFormatada, 'right');
   y += 7;
   
-  drawDanfeBox(m, y, w * 0.45, 7, "ENDEREÇO", "-");
-  drawDanfeBox(m + w * 0.45, y, w * 0.30, 7, "BAIRRO/DISTRITO", "-");
-  drawDanfeBox(m + w * 0.75, y, w * 0.10, 7, "CEP", "-");
+  // Usar endereço de entrega se preenchido, senão traços
+  const enderecoEntrega = dados.entrega?.endereco || "-";
+  const bairroEntrega = dados.entrega?.bairro || "-";
+  const cepEntrega = dados.entrega?.cep || "-";
+  
+  drawDanfeBox(m, y, w * 0.45, 7, "ENDEREÇO", enderecoEntrega);
+  drawDanfeBox(m + w * 0.45, y, w * 0.30, 7, "BAIRRO/DISTRITO", bairroEntrega);
+  drawDanfeBox(m + w * 0.75, y, w * 0.10, 7, "CEP", cepEntrega);
   drawDanfeBox(m + w * 0.85, y, w * 0.15, 7, "HORA DE SAÍDA", horaFormatada, 'right');
   y += 7;
 
@@ -177,7 +201,8 @@ export const gerarComprovanteDANFE = (dados: DadosComprovante): jsPDF => {
   drawSectionTitle("CÁLCULO DO PEDIDO", y + 2.5);
   y += 3.5; 
   
-  drawDanfeBox(m, y, w * 0.20, 7, "VALOR DO FRETE", "0,00", 'right');
+  const valorFrete = dados.venda.valor_frete || 0;
+  drawDanfeBox(m, y, w * 0.20, 7, "VALOR DO FRETE", fmtMoney(valorFrete), 'right');
   drawDanfeBox(m + w * 0.20, y, w * 0.20, 7, "VALOR DO DESCONTO", "0,00", 'right');
   drawDanfeBox(m + w * 0.40, y, w * 0.20, 7, "OUTRAS DESPESAS", "0,00", 'right');
   

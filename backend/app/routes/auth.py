@@ -33,57 +33,45 @@ def get_current_user(credentials = Depends(security)) -> dict:
 
 @router.post("/login", response_model=TokenResponse)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
-    """Login do usuário com username e password
-    
-    **Credenciais padrão:**
-    - username: admin
-    - password: admin123
-    """
+    """Login do usuário com username e password"""
     
     username = login_data.username
     password = login_data.password
     
-    # Verificar contra credenciais fixas configuradas
-    if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
-        # Buscar ou criar usuário admin
-        usuario = db.query(Usuario).filter(Usuario.username == username).first()
-        
-        if not usuario:
-            usuario = Usuario(
-                username=username,
-                email="admin@orderflow.local",
-                hashed_password=get_password_hash(password),
-                is_admin=True,
-                is_active=True
-            )
-            db.add(usuario)
-            db.commit()
-            db.refresh(usuario)
-        
-        # Criar token
-        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": usuario.username, "user_id": usuario.id},
-            expires_delta=access_token_expires
-        )
-        
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "usuario": {
-                "id": usuario.id,
-                "username": usuario.username,
-                "email": usuario.email,
-                "is_active": usuario.is_active,
-                "is_admin": usuario.is_admin,
-                "created_at": usuario.created_at
-            }
-        }
+    # Buscar usuário no banco de dados
+    usuario = db.query(Usuario).filter(Usuario.username == username).first()
     
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Usuário ou senha incorretos"
+    if not usuario or not verify_password(password, usuario.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário ou senha incorretos"
+        )
+    
+    if not usuario.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Usuário inativo"
+        )
+    
+    # Criar token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": usuario.username, "user_id": usuario.id},
+        expires_delta=access_token_expires
     )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "usuario": {
+            "id": usuario.id,
+            "username": usuario.username,
+            "email": usuario.email,
+            "is_active": usuario.is_active,
+            "is_admin": usuario.is_admin,
+            "created_at": usuario.created_at
+        }
+    }
 
 
 @router.post("/register", response_model=TokenResponse)
