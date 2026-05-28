@@ -279,9 +279,25 @@ export const PDVPage: React.FC = () => {
       // Extrair mensagem de erro do backend
       let errorMsg = 'Erro ao finalizar venda';
       if (error.message) {
-        errorMsg = error.message;
+        try {
+          const jsonError = JSON.parse(error.message);
+          if (jsonError.detail) {
+            errorMsg = jsonError.detail;
+          } else if (jsonError.message) {
+            errorMsg = jsonError.message;
+          }
+        } catch {
+          errorMsg = error.message;
+        }
       } else if (error.detail) {
         errorMsg = error.detail;
+      } else if (error.response?.data) {
+        const data = error.response.data;
+        if (data.detail) {
+          errorMsg = data.detail;
+        } else if (data.message) {
+          errorMsg = data.message;
+        }
       }
       setErroMensagem(errorMsg);
       setShowModalErro(true);
@@ -533,7 +549,6 @@ export const PDVPage: React.FC = () => {
                         type="text"
                         value={freteFocus ? precoFreteFormatado : precoFreteFormatado}
                         onChange={(e) => {
-                          // Aplica máscara monetária automaticamente
                           let valor = e.target.value.replace(/\D/g, '');
                           if (valor) {
                             const num = parseInt(valor, 10) / 100;
@@ -544,7 +559,6 @@ export const PDVPage: React.FC = () => {
                         }}
                         onFocus={() => {
                           setFreteFocus(true);
-                          // Remove formatação ao focar para facilitar edição
                           const valorNumerico = extrairValorMoeda(precoFreteFormatado);
                           if (valorNumerico > 0) {
                             setPrecoFreteFormatado(valorNumerico.toFixed(2).replace('.', ','));

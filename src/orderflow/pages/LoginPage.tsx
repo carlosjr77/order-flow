@@ -48,7 +48,7 @@ export const LoginPage: React.FC = () => {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={isLoading}
-              placeholder="admin"
+              placeholder="Digite seu usuário"
               className="w-full"
             />
           </div>
@@ -62,7 +62,7 @@ export const LoginPage: React.FC = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
-              placeholder="admin123"
+              placeholder="Digite sua senha"
               className="w-full"
             />
           </div>
