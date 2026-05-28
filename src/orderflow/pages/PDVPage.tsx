@@ -44,7 +44,7 @@ export const PDVPage: React.FC = () => {
     cep: '',
   });
 
-  const [precoFreteFormatado, setPrecoFreteFormatado] = useState('');
+  const [precoFreteFormatado, setPrecoFreteFormatado] = useState('0,00');
   const [freteFocus, setFreteFocus] = useState(false);
 
   const dadosEmpresaPadrao: DadosEmpresa = {
@@ -257,18 +257,34 @@ export const PDVPage: React.FC = () => {
       setVendaFinalizada(vendaDetalhes);
       setShowModalSucesso(true);
 
+      // Resetar todos os campos
       setCarrinho([]);
       setFormaPagamento('');
       setObservacoes('');
-      setPrecoFreteFormatado('');
+      setPrecoFreteFormatado('0,00');
+      setDadosCliente({ nome: '', documento: '' });
+      setEnderecoEntrega({
+        endereco: '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        cidade: '',
+        estado: '',
+        cep: '',
+      });
+      setShowDadosCliente(false);
+      setShowEnderecoEntrega(false);
     } catch (error: any) {
       console.error('Erro ao finalizar venda:', error);
-      if (error.message && error.message.includes('Estoque insuficiente')) {
-        setErroMensagem(error.message);
-        setShowModalErro(true);
-      } else {
-        alert('Erro ao finalizar venda');
+      // Extrair mensagem de erro do backend
+      let errorMsg = 'Erro ao finalizar venda';
+      if (error.message) {
+        errorMsg = error.message;
+      } else if (error.detail) {
+        errorMsg = error.detail;
       }
+      setErroMensagem(errorMsg);
+      setShowModalErro(true);
     }
   };
 
@@ -515,15 +531,29 @@ export const PDVPage: React.FC = () => {
                       </label>
                       <Input
                         type="text"
-                        value={freteFocus ? precoFreteFormatado : (precoFreteFormatado || '0,00')}
-                        onChange={(e) => setPrecoFreteFormatado(e.target.value)}
-                        onFocus={() => setFreteFocus(true)}
+                        value={freteFocus ? precoFreteFormatado : precoFreteFormatado}
+                        onChange={(e) => {
+                          // Aplica máscara monetária automaticamente
+                          let valor = e.target.value.replace(/\D/g, '');
+                          if (valor) {
+                            const num = parseInt(valor, 10) / 100;
+                            setPrecoFreteFormatado(num.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+                          } else {
+                            setPrecoFreteFormatado('0,00');
+                          }
+                        }}
+                        onFocus={() => {
+                          setFreteFocus(true);
+                          // Remove formatação ao focar para facilitar edição
+                          const valorNumerico = extrairValorMoeda(precoFreteFormatado);
+                          if (valorNumerico > 0) {
+                            setPrecoFreteFormatado(valorNumerico.toFixed(2).replace('.', ','));
+                          }
+                        }}
                         onBlur={() => {
                           setFreteFocus(false);
-                          if (precoFreteFormatado) {
-                            const formatado = aplicarMascaraMoeda(precoFreteFormatado);
-                            setPrecoFreteFormatado(formatado);
-                          }
+                          const formatado = aplicarMascaraMoeda(precoFreteFormatado);
+                          setPrecoFreteFormatado(formatado || '0,00');
                         }}
                         placeholder="0,00"
                         className="w-full"
@@ -571,7 +601,7 @@ export const PDVPage: React.FC = () => {
                       Finalizar Venda
                     </Button>
                     <Button
-                      onClick={() => { setCarrinho([]); setFormaPagamento(''); setPrecoFreteFormatado(''); }}
+                      onClick={() => { setCarrinho([]); setFormaPagamento(''); setPrecoFreteFormatado('0,00'); }}
                       variant="outline"
                       className="w-full"
                     >

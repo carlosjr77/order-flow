@@ -177,13 +177,24 @@ export const gerarComprovanteDANFE = (dados: DadosComprovante): jsPDF => {
   
   // Usar endereço de entrega se preenchido, senão traços
   const enderecoEntrega = dados.entrega?.endereco || "-";
+  const numeroEntrega = dados.entrega?.numero || "-";
+  const complementoEntrega = dados.entrega?.complemento ? ` - ${dados.entrega.complemento}` : "";
   const bairroEntrega = dados.entrega?.bairro || "-";
+  const cidadeEntrega = dados.entrega?.cidade || "-";
+  const estadoEntrega = dados.entrega?.estado || "-";
   const cepEntrega = dados.entrega?.cep || "-";
   
-  drawDanfeBox(m, y, w * 0.45, 7, "ENDEREÇO", enderecoEntrega);
-  drawDanfeBox(m + w * 0.45, y, w * 0.30, 7, "BAIRRO/DISTRITO", bairroEntrega);
-  drawDanfeBox(m + w * 0.75, y, w * 0.10, 7, "CEP", cepEntrega);
+  // Linha 1: Endereço, Bairro, CEP
+  drawDanfeBox(m, y, w * 0.45, 7, "ENDEREÇO", `${enderecoEntrega}, ${numeroEntrega}${complementoEntrega}`);
+  drawDanfeBox(m + w * 0.45, y, w * 0.25, 7, "BAIRRO/DISTRITO", bairroEntrega);
+  drawDanfeBox(m + w * 0.70, y, w * 0.15, 7, "CEP", cepEntrega);
   drawDanfeBox(m + w * 0.85, y, w * 0.15, 7, "HORA DE SAÍDA", horaFormatada, 'right');
+  y += 7;
+  
+  // Linha 2: Cidade, Estado
+  drawDanfeBox(m, y, w * 0.50, 7, "CIDADE", cidadeEntrega);
+  drawDanfeBox(m + w * 0.50, y, w * 0.10, 7, "ESTADO", estadoEntrega);
+  drawDanfeBox(m + w * 0.60, y, w * 0.40, 7, "INSCRIÇÃO ESTADUAL", "-");
   y += 7;
 
   // ==================== PAGAMENTO ====================
