@@ -66,6 +66,17 @@ def configure_timezone():
                 print("✅ Fuso horário configurado para 'America/Sao_Paulo' (banco de dados)")
     except Exception as e:
         print(f"ℹ️ Não foi possível configurar fuso horário do banco (pode exigir permissões de superusuário): {e}")
+    
+    # Configurar timezone global do PostgreSQL se possível
+    try:
+        with engine.connect() as conn:
+            # Tentar configurar timezone global (requer superusuário)
+            conn.execution_options(isolation_level="AUTOCOMMIT").execute(
+                text("ALTER SYSTEM SET timezone TO 'America/Sao_Paulo'")
+            )
+            print("✅ Fuso horário configurado globalmente (ALTER SYSTEM)")
+    except Exception as e:
+        print(f"ℹ️ Não foi possível configurar fuso horário global: {e}")
 
 # Executar migrações
 run_migrations()

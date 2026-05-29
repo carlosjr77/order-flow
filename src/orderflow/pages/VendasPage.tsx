@@ -59,14 +59,29 @@ export const VendasPage: React.FC = () => {
 
   const downloadComprovante = async (venda: Venda) => {
     try {
+      // Buscar detalhes completos da venda (com itens completos)
+      const vendaDetalhes = await apiClient.obterVenda(venda.id);
+      
+      // Mapear itens com dados completos
+      const documentoItens = vendaDetalhes.itens?.map((item) => ({
+        ...item,
+        descricao: item.descricao || 'Produto',
+        codigo_interno: item.codigo_interno || String(item.produto_id),
+        unidade_medida: item.unidade_medida || 'UN',
+        ncm: item.ncm || undefined,
+      })) || [];
+
       const dadosComprovante = {
         empresa: empresaDados || dadosEmpresaPadrao,
-        venda,
-        itens: venda.itens || [],
+        venda: vendaDetalhes,
+        itens: documentoItens,
+        // Não há dados de cliente/entrega no histórico, usa null
+        cliente: null,
+        entrega: null,
       };
 
       const pdf = gerarComprovanteDANFE(dadosComprovante);
-      pdf.save(`Pedido_${venda.id}_${new Date().getTime()}.pdf`);
+      pdf.save(`Pedido_${vendaDetalhes.id}_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
     }
