@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Venda, ItemVenda } from '../types';
+import logoOk from '../../assets/logo-ok.png';
 
 export interface DadosComprovante {
   empresa: {
@@ -38,7 +39,7 @@ export interface DadosComprovante {
 const fmtMoney = (valor: number | string) =>
   Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-export const gerarComprovanteDANFE = (dados: DadosComprovante): jsPDF => {
+export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<jsPDF> => {
   const doc = new jsPDF('p', 'mm', 'a4');
   const m = 5; // Margem padrão (5mm)
   const w = 200; // Largura utilizável (210 - 5 - 5)
@@ -140,18 +141,23 @@ export const gerarComprovanteDANFE = (dados: DadosComprovante): jsPDF => {
   doc.text(`Nº ${numPedido}`, m + w * 0.45 + (w * 0.15)/2, y + 24, { align: 'center' });
   doc.text("SÉRIE: 1", m + w * 0.45 + (w * 0.15)/2, y + 28, { align: 'center' });
 
-  // 3. Bloco Código Barras (40%)
+  // 3. Bloco Logo (40%)
   doc.rect(m + w * 0.60, y, w * 0.40, headerHeight);
-  doc.setFontSize(5.5); doc.setFont('helvetica', 'normal');
-  doc.text("CONTROLE INTERNO DO SISTEMA", m + w * 0.60 + 1, y + 2.5);
-  // Simulação barras (Apenas visual texto)
-  doc.setFontSize(20);
-  doc.text("|||||||| |||||| |||||||| ||||", m + w * 0.60 + (w * 0.40)/2, y + 14, { align: 'center' });
-  doc.setFontSize(7);
-  doc.text("Consulte a validade deste pedido com o setor de vendas.", m + w * 0.60 + (w * 0.40)/2, y + 20, { align: 'center' });
-  doc.line(m + w * 0.60, y + 24, m + w, y + 24);
-  doc.setFontSize(8); doc.setFont('helvetica', 'bold');
-  doc.text("SEM VALOR FISCAL", m + w * 0.60 + (w * 0.40)/2, y + 28, { align: 'center' });
+  
+  try {
+    // Usar a logo importada diretamente - centralizada no bloco
+    const logoWidth = 25;
+    const logoHeight = 25;
+    const logoX = m + w * 0.60 + (w * 0.40 - logoWidth) / 2;
+    const logoY = y + (headerHeight - logoHeight) / 2;
+    doc.addImage(logoOk, 'PNG', logoX, logoY, logoWidth, logoHeight);
+  } catch (error) {
+    console.error('Erro ao adicionar imagem ao PDF:', error);
+    doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+    doc.text("✓ OK", m + w * 0.60 + (w * 0.40)/2, y + (headerHeight / 2) + 2, { align: 'center' });
+  }
+  
+  // doc.line(m + w * 0.60, y + 24, m + w, y + 24);
 
   y += headerHeight; // Aqui não tem gap propositalmente, as caixas são coladas
 

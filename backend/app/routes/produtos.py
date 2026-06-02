@@ -102,6 +102,9 @@ def atualizar_produto(
     
     update_data = produto_data.dict(exclude_unset=True)
     for field, value in update_data.items():
+        # Converter boolean para integer para vender_sem_estoque (0 ou 1)
+        if field == "vender_sem_estoque" and isinstance(value, bool):
+            value = 1 if value else 0
         setattr(produto, field, value)
     
     db.add(produto)

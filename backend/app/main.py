@@ -5,7 +5,7 @@ import uvicorn
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, produtos, vendas, empresas
+from app.routes import auth, produtos, vendas, empresas, clientes
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -105,6 +105,7 @@ app.include_router(auth.router)
 app.include_router(produtos.router)
 app.include_router(vendas.router)
 app.include_router(empresas.router)
+app.include_router(clientes.router)
 
 
 @app.get("/")

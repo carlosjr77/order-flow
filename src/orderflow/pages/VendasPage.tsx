@@ -80,7 +80,7 @@ export const VendasPage: React.FC = () => {
         entrega: null,
       };
 
-      const pdf = gerarComprovanteDANFE(dadosComprovante);
+      const pdf = await gerarComprovanteDANFE(dadosComprovante);
       pdf.save(`Pedido_${vendaDetalhes.id}_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);

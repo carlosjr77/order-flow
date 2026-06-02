@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout } = useAuth();
@@ -137,6 +137,13 @@ export const DashboardPage: React.FC = () => {
             icon={<Package className="w-8 h-8" />}
             onClick={() => navigate('/produtos')}
             color="bg-green-50 hover:bg-green-100"
+          />
+          <QuickAccessCard
+            title="Gestão de Clientes"
+            description="Cadastrar clientes"
+            icon={<Users className="w-8 h-8" />}
+            onClick={() => navigate('/clientes')}
+            color="bg-yellow-50 hover:bg-yellow-100"
           />
           <QuickAccessCard
             title="Vendas"

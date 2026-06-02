@@ -73,6 +73,23 @@ export interface EstatisticasVendas {
   quantidade_itens: number;
 }
 
+export interface Cliente {
+  id: number;
+  nome: string;
+  documento?: string;
+  email?: string;
+  telefone?: string;
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DadosEmpresa {
   nome: string;
   cnpj: string;

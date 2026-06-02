@@ -7,6 +7,7 @@ import { PrivateRoute } from './components/PrivateRoute';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProdutosPage } from './pages/ProdutosPage';
+import { ClientesPage } from './pages/ClientesPage';
 import { PDVPage } from './pages/PDVPage';
 import { VendasPage } from './pages/VendasPage';
 import { EmpresaPage } from './pages/EmpresaPage';
@@ -33,6 +34,14 @@ export const OrderFlowApp: React.FC = () => {
             element={
               <PrivateRoute>
                 <ProdutosPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/clientes"
+            element={
+              <PrivateRoute>
+                <ClientesPage />
               </PrivateRoute>
             }
           />

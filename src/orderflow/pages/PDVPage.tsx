@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { Produto, ItemCarrinho, Venda, DadosEmpresa } from '../types';
+import { Produto, ItemCarrinho, Venda, DadosEmpresa, Cliente } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle }
 import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
 import { useDebounce } from '../hooks/useDebounce';
 import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
+import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 
 export const PDVPage: React.FC = () => {
   const navigate = useNavigate();
@@ -26,6 +27,10 @@ export const PDVPage: React.FC = () => {
   const [vendaFinalizada, setVendaFinalizada] = useState<Venda | null>(null);
   
   // Dados do cliente
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  const [showListaClientes, setShowListaClientes] = useState(false);
   const [showDadosCliente, setShowDadosCliente] = useState(false);
   const [dadosCliente, setDadosCliente] = useState({
     nome: '',
@@ -34,6 +39,7 @@ export const PDVPage: React.FC = () => {
 
   // Dados de entrega
   const [showEnderecoEntrega, setShowEnderecoEntrega] = useState(false);
+  const [editandoEndereco, setEditandoEndereco] = useState(false);
   const [enderecoEntrega, setEnderecoEntrega] = useState({
     endereco: '',
     numero: '',
@@ -74,6 +80,43 @@ export const PDVPage: React.FC = () => {
       console.error('Erro ao carregar dados da empresa:', error);
       setEmpresaDados(null);
     }
+  };
+
+  const loadClientes = async () => {
+    try {
+      const data = await apiClient.listarClientes(0, 100, buscaCliente || undefined);
+      setClientes(data);
+    } catch (error) {
+      console.error('Erro ao carregar clientes:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (showListaClientes) {
+      loadClientes();
+    }
+  }, [buscaCliente, showListaClientes]);
+
+  const selecionarCliente = (cliente: Cliente) => {
+    setClienteSelecionado(cliente);
+    setDadosCliente({
+      nome: cliente.nome || '',
+      documento: cliente.documento || '',
+    });
+    if (cliente.endereco) {
+      setEnderecoEntrega({
+        endereco: cliente.endereco || '',
+        numero: cliente.numero || '',
+        complemento: cliente.complemento || '',
+        bairro: cliente.bairro || '',
+        cidade: cliente.cidade || '',
+        estado: cliente.estado || '',
+        cep: cliente.cep || '',
+      });
+      setShowEnderecoEntrega(true);
+    }
+    setShowListaClientes(false);
+    setShowDadosCliente(true);
   };
 
   useEffect(() => {
@@ -129,19 +172,59 @@ export const PDVPage: React.FC = () => {
     setCarrinho(carrinho.filter((item) => item.id !== id));
   };
 
-  const atualizarQuantidade = (id: number, novaQuantidade: number) => {
-    if (novaQuantidade <= 0) {
-      removerDoCarrinho(id);
+  const atualizarQuantidade = (id: number, novaQuantidade: number | string) => {
+    // Se está vazio (usuário apagando para digitar novo valor)
+    if (novaQuantidade === '' || novaQuantidade === null || novaQuantidade === undefined) {
+      setCarrinho(
+        carrinho.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                quantidade: 0,
+                valor_total: 0,
+              }
+            : item
+        )
+      );
       return;
     }
 
+    const quantidade = typeof novaQuantidade === 'string' ? parseFloat(novaQuantidade) : novaQuantidade;
+    
+    // Validação: se não for um número válido
+    if (isNaN(quantidade)) {
+      return;
+    }
+
+    // Se for negativo, não faz nada
+    if (quantidade < 0) {
+      return;
+    }
+
+    // Se for 0, apenas atualiza para 0 (campo fica vazio) sem remover
+    if (quantidade === 0) {
+      setCarrinho(
+        carrinho.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                quantidade: 0,
+                valor_total: 0,
+              }
+            : item
+        )
+      );
+      return;
+    }
+
+    // Atualiza com o valor positivo
     setCarrinho(
       carrinho.map((item) =>
         item.id === id
           ? {
               ...item,
-              quantidade: novaQuantidade,
-              valor_total: novaQuantidade * item.valor_unitario,
+              quantidade: quantidade,
+              valor_total: quantidade * item.valor_unitario,
             }
           : item
       )
@@ -173,7 +256,7 @@ export const PDVPage: React.FC = () => {
     setErroMensagem('');
   };
 
-  const imprimirPDFVenda = () => {
+  const imprimirPDFVenda = async () => {
     if (!vendaFinalizada) return;
     
     try {
@@ -185,7 +268,11 @@ export const PDVPage: React.FC = () => {
         ncm: item.ncm || undefined,
       })) || [];
 
-      const clienteDados = showDadosCliente && dadosCliente.nome ? dadosCliente : null;
+      // Usar clienteSelecionado se disponível, caso contrário dadosCliente
+      const clienteDados = clienteSelecionado 
+        ? { nome: clienteSelecionado.nome, documento: clienteSelecionado.documento || '' }
+        : (showDadosCliente && dadosCliente.nome ? dadosCliente : null);
+      
       const entregaDados = showEnderecoEntrega && enderecoEntrega.endereco ? enderecoEntrega : null;
 
       const dadosComprovante = {
@@ -196,7 +283,7 @@ export const PDVPage: React.FC = () => {
         entrega: entregaDados,
       };
 
-      const pdf = gerarComprovanteDANFE(dadosComprovante);
+      const pdf = await gerarComprovanteDANFE(dadosComprovante);
       pdf.save(`Pedido_${vendaFinalizada.id}_${new Date().getTime()}.pdf`);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -214,12 +301,38 @@ export const PDVPage: React.FC = () => {
       return;
     }
 
+    // Validar cliente - usar selecionado ou preenchido manualmente
+    const temClienteSelecionado = !!clienteSelecionado;
+    const temClientePreenchido = showDadosCliente && dadosCliente.nome.trim();
+    
+    if (!temClienteSelecionado && !temClientePreenchido) {
+      alert('Selecione um cliente ou preencha os dados do cliente!');
+      return;
+    }
+
+    // Validar endereço - se entrega estiver marcada
+    if (showEnderecoEntrega) {
+      const temEndereco = enderecoEntrega.endereco.trim() && enderecoEntrega.numero.trim();
+      if (!temEndereco) {
+        alert('Preencha o endereço de entrega!');
+        return;
+      }
+    }
+
     try {
-      const itens = carrinho.map((item) => ({
-        produto_id: item.produto_id,
-        quantidade: item.quantidade,
-        valor_unitario: item.valor_unitario,
-      }));
+      // Filtrar itens com quantidade válida (maior que 0)
+      const itens = carrinho
+        .filter((item) => item.quantidade > 0)
+        .map((item) => ({
+          produto_id: item.produto_id,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+        }));
+
+      if (itens.length === 0) {
+        alert('Adicione produtos com quantidade maior que zero!');
+        return;
+      }
 
       const valorFreteNum = extrairValorMoeda(precoFreteFormatado) || 0;
 
@@ -240,7 +353,11 @@ export const PDVPage: React.FC = () => {
         ncm: item.ncm || undefined,
       })) || [];
 
-      const clienteDados = showDadosCliente && dadosCliente.nome ? dadosCliente : null;
+      // Usar clienteSelecionado se disponível, caso contrário dadosCliente
+      const clienteDados = clienteSelecionado 
+        ? { nome: clienteSelecionado.nome, documento: clienteSelecionado.documento || '' }
+        : (showDadosCliente && dadosCliente.nome ? dadosCliente : null);
+      
       const entregaDados = showEnderecoEntrega && enderecoEntrega.endereco ? enderecoEntrega : null;
 
       const dadosComprovante = {
@@ -251,7 +368,7 @@ export const PDVPage: React.FC = () => {
         entrega: entregaDados,
       };
 
-      const pdf = gerarComprovanteDANFE(dadosComprovante);
+      const pdf = await gerarComprovanteDANFE(dadosComprovante);
       pdf.save(`Pedido_${venda.id}_${new Date().getTime()}.pdf`);
 
       setVendaFinalizada(vendaDetalhes);
@@ -262,6 +379,8 @@ export const PDVPage: React.FC = () => {
       setFormaPagamento('');
       setObservacoes('');
       setPrecoFreteFormatado('0,00');
+      setClienteSelecionado(null);
+      setBuscaCliente('');
       setDadosCliente({ nome: '', documento: '' });
       setEnderecoEntrega({
         endereco: '',
@@ -274,6 +393,7 @@ export const PDVPage: React.FC = () => {
       });
       setShowDadosCliente(false);
       setShowEnderecoEntrega(false);
+      setShowListaClientes(false);
     } catch (error: any) {
       console.error('Erro ao finalizar venda:', error);
       // Extrair mensagem de erro do backend
@@ -417,11 +537,13 @@ export const PDVPage: React.FC = () => {
                         <div className="flex items-center gap-2">
                           <input
                             type="number"
-                            min="1"
-                            value={item.quantidade}
-                            onChange={(e) => atualizarQuantidade(item.id, parseInt(e.target.value))}
+                            step={item.unidade_medida === 'KG' ? '0.001' : '1'}
+                            value={item.quantidade === 0 ? '' : item.quantidade}
+                            onChange={(e) => atualizarQuantidade(item.id, e.target.value)}
                             className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                            placeholder="0"
                           />
+                          <span className="text-xs text-gray-500 min-w-fit">{item.unidade_medida}</span>
                           <p className="text-sm font-semibold text-gray-900">
                             R$ {item.valor_total.toFixed(2)}
                           </p>
@@ -443,13 +565,13 @@ export const PDVPage: React.FC = () => {
                     {/* Botões de opções adicionais */}
                     <div className="flex gap-2 mb-4">
                       <Button
-                        variant={showDadosCliente ? "default" : "outline"}
+                        variant={clienteSelecionado ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setShowDadosCliente(!showDadosCliente)}
+                        onClick={() => setShowListaClientes(!showListaClientes)}
                         className="flex-1"
                       >
                         <User className="w-4 h-4 mr-1" />
-                        Cliente
+                        {clienteSelecionado ? 'Trocar Cliente' : 'Selecionar Cliente'}
                       </Button>
                       <Button
                         variant={showEnderecoEntrega ? "default" : "outline"}
@@ -462,28 +584,155 @@ export const PDVPage: React.FC = () => {
                       </Button>
                     </div>
 
-                    {/* Dados do Cliente */}
-                    {showDadosCliente && (
+                    {/* Seleção de Cliente */}
+                    {showListaClientes && (
                       <div className="mb-4 p-3 bg-gray-50 rounded">
-                        <div className="space-y-2">
-                          <Input
-                            placeholder="Nome do Cliente"
-                            value={dadosCliente.nome}
-                            onChange={(e) => setDadosCliente({...dadosCliente, nome: e.target.value})}
-                            size="sm"
-                          />
-                          <Input
-                            placeholder="CPF/CNPJ"
-                            value={aplicarMascaraDocumento(dadosCliente.documento)}
-                            onChange={(e) => setDadosCliente({...dadosCliente, documento: e.target.value.replace(/\D/g, '')})}
-                            size="sm"
-                          />
+                        <Input
+                          placeholder="Buscar cliente por nome ou documento..."
+                          value={buscaCliente}
+                          onChange={(e) => setBuscaCliente(e.target.value)}
+                          className="mb-3"
+                          size="sm"
+                        />
+                        <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
+                          {clientes.length === 0 ? (
+                            <p className="p-3 text-sm text-gray-500">Nenhum cliente encontrado</p>
+                          ) : (
+                            clientes.map((cliente) => (
+                              <button
+                                key={cliente.id}
+                                onClick={() => selecionarCliente(cliente)}
+                                className="w-full text-left p-3 border-b hover:bg-blue-50 transition-colors last:border-b-0"
+                              >
+                                <p className="font-semibold text-gray-900">{cliente.nome}</p>
+                                <p className="text-xs text-gray-600">{cliente.documento || ''}</p>
+                              </button>
+                            ))
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {/* Endereço de Entrega */}
-                    {showEnderecoEntrega && (
+                    {/* Dados do Cliente Selecionado */}
+                    {clienteSelecionado && (
+                      <div className="mb-4 p-4 bg-green-50 border-2 border-green-300 rounded">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-semibold text-green-800">✓ Cliente Selecionado</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setClienteSelecionado(null);
+                              setShowDadosCliente(false);
+                            }}
+                            className="h-6 px-2 text-xs"
+                          >
+                            Trocar
+                          </Button>
+                        </div>
+                        <p className="font-bold text-lg text-gray-900 mb-1">{clienteSelecionado.nome}</p>
+                        <div className="space-y-1 text-sm text-gray-700">
+                          {clienteSelecionado.documento && (
+                            <p>
+                              <span className="font-medium">CPF/CNPJ:</span> {formatarDocumento(clienteSelecionado.documento)}
+                            </p>
+                          )}
+                          {clienteSelecionado.telefone && (
+                            <p>
+                              <span className="font-medium">Telefone:</span> {formatarTelefone(clienteSelecionado.telefone)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Cliente Preenchido Manualmente */}
+                    {!clienteSelecionado && showDadosCliente && dadosCliente.nome && (
+                      <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-semibold text-amber-800">👤 Cliente Preenchido</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowDadosCliente(false);
+                              setDadosCliente({ nome: '', documento: '' });
+                            }}
+                            className="h-6 px-2 text-xs"
+                          >
+                            Limpar
+                          </Button>
+                        </div>
+                        <p className="font-bold text-lg text-gray-900 mb-1">{dadosCliente.nome}</p>
+                        {dadosCliente.documento && (
+                          <p className="text-sm text-gray-700">
+                            <span className="font-medium">CPF/CNPJ:</span> {formatarDocumento(dadosCliente.documento)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Formulário Cliente Manual */}
+                    {!clienteSelecionado && (!showDadosCliente || !dadosCliente.nome) && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded border border-gray-200">
+                        <p className="text-xs font-semibold text-gray-700 mb-3">Preencher Cliente Manualmente</p>
+                        <div className="space-y-2">
+                          <Input
+                            placeholder="Nome do cliente"
+                            value={dadosCliente.nome}
+                            onChange={(e) => setDadosCliente({ ...dadosCliente, nome: e.target.value })}
+                            size="sm"
+                          />
+                          <Input
+                            placeholder="CPF ou CNPJ"
+                            value={dadosCliente.documento}
+                            onChange={(e) => {
+                              const valor = e.target.value;
+                              const formatado = valor ? formatarDocumento(valor) : '';
+                              setDadosCliente({ ...dadosCliente, documento: formatado });
+                            }}
+                            size="sm"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              if (dadosCliente.nome.trim()) {
+                                setShowDadosCliente(true);
+                              }
+                            }}
+                            className="w-full bg-blue-600 hover:bg-blue-700 h-8"
+                          >
+                            Usar Este Cliente
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Resumo Endereço de Entrega */}
+                    {showEnderecoEntrega && enderecoEntrega.endereco && !editandoEndereco && (
+                      <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-semibold text-blue-800">📍 Endereço de Entrega</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditandoEndereco(true)}
+                            className="h-6 px-2 text-xs"
+                          >
+                            Editar
+                          </Button>
+                        </div>
+                        <div className="space-y-1 text-sm text-gray-700">
+                          <p className="font-medium">{enderecoEntrega.endereco}, {enderecoEntrega.numero}</p>
+                          {enderecoEntrega.complemento && <p>{enderecoEntrega.complemento}</p>}
+                          <p>{enderecoEntrega.bairro} - {enderecoEntrega.cidade}/{enderecoEntrega.estado}</p>
+                          {enderecoEntrega.cep && <p>CEP: {aplicarMascaraCep(enderecoEntrega.cep)}</p>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Endereço de Entrega - Formulário */}
+                    {showEnderecoEntrega && (editandoEndereco || !enderecoEntrega.endereco) && (
                       <div className="mb-4 p-3 bg-gray-50 rounded">
                         <div className="space-y-2">
                           <Input
@@ -537,6 +786,18 @@ export const PDVPage: React.FC = () => {
                             />
                           </div>
                         </div>
+                        {editandoEndereco && (
+                          <div className="mt-3 flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditandoEndereco(false)}
+                              className="flex-1 h-8"
+                            >
+                              Pronto
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -615,7 +876,14 @@ export const PDVPage: React.FC = () => {
                       Finalizar Venda
                     </Button>
                     <Button
-                      onClick={() => { setCarrinho([]); setFormaPagamento(''); setPrecoFreteFormatado('0,00'); }}
+                      onClick={() => { 
+                        setCarrinho([]); 
+                        setFormaPagamento(''); 
+                        setPrecoFreteFormatado('0,00');
+                        setClienteSelecionado(null);
+                        setShowListaClientes(false);
+                        setBuscaCliente('');
+                      }}
                       variant="outline"
                       className="w-full"
                     >

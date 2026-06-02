@@ -158,3 +158,44 @@ class EmpresaResponse(EmpresaBase):
     
     class Config:
         from_attributes = True
+
+
+class ClienteBase(BaseModel):
+    nome: str
+    documento: Optional[str] = None
+    email: Optional[str] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+
+
+class ClienteCreate(ClienteBase):
+    pass
+
+
+class ClienteUpdate(BaseModel):
+    nome: Optional[str] = None
+    documento: Optional[str] = None
+    email: Optional[str] = None
+    telefone: Optional[str] = None
+    endereco: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    cep: Optional[str] = None
+
+
+class ClienteResponse(ClienteBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True

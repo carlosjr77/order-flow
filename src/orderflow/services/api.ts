@@ -163,6 +163,31 @@ export class APIClient {
   async deletarEmpresa(id: number) {
     return this.request(`/api/empresas/${id}`, 'DELETE');
   }
+
+  // Clientes endpoints
+  async listarClientes(skip = 0, limit = 100, busca?: string) {
+    const params = new URLSearchParams();
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    if (busca) params.append('busca', busca);
+    return this.request(`/api/clientes?${params}`, 'GET');
+  }
+
+  async obterCliente(id: number) {
+    return this.request(`/api/clientes/${id}`, 'GET');
+  }
+
+  async criarCliente(data: any) {
+    return this.request('/api/clientes', 'POST', data);
+  }
+
+  async atualizarCliente(id: number, data: any) {
+    return this.request(`/api/clientes/${id}`, 'PUT', data);
+  }
+
+  async deletarCliente(id: number) {
+    return this.request(`/api/clientes/${id}`, 'DELETE');
+  }
 }
 
 export const apiClient = new APIClient();
