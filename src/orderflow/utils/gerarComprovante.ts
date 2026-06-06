@@ -3,6 +3,14 @@ import autoTable from 'jspdf-autotable';
 import { Venda, ItemVenda } from '../types';
 import logoOk from '../../assets/logo-ok.png';
 
+export interface ItemListaCompras {
+  codigo: string;
+  descricao: string;
+  quantidade_total: number;
+  unidade_medida: string;
+  vendas_origem: number[]; // IDs das vendas que originaram este item
+}
+
 export interface DadosComprovante {
   empresa: {
     nome: string;
@@ -329,3 +337,294 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
 
   return doc;
 };
+
+export interface DadosListaCompras {
+  empresa: {
+    nome: string;
+    cnpj: string;
+    endereco: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+    cep: string;
+    telefone?: string;
+  };
+  itens: ItemListaCompras[];
+  vendas_ids: number[];
+  data_geracao: Date;
+  total_vendas: number;
+  total_itens: number;
+}
+
+/**
+ * Gera um PDF de lista de compras baseado em múltiplas vendas selecionadas.
+ * Este documento é para controle interno e para levar para fazer as compras.
+ * Layout parecido com o DANFE, mas simplificado para lista de compras.
+ */
+export const gerarListaCompras = async (dados: DadosListaCompras): Promise<jsPDF> => {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const m = 5; // Margem padrão (5mm)
+  const w = 200; // Largura utilizável (210 - 5 - 5)
+  let y = m;
+
+  const dataFormatada = dados.data_geracao.toLocaleDateString('pt-BR');
+  const horaFormatada = dados.data_geracao.toLocaleTimeString('pt-BR').slice(0, 5);
+
+  // ==========================================
+  // FUNÇÕES UTILITÁRIAS DE DESENHO
+  // ==========================================
+  
+  const drawDanfeBox = (x: number, y: number, width: number, height: number, label: string, value: string, align: 'left'|'center'|'right' = 'left') => {
+    doc.setDrawColor(0, 0, 0);
+    doc.rect(x, y, width, height);
+    
+    if (label) {
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(label, x + 1, y + 2.5);
+    }
+    
+    if (value) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      
+      let textX = x + 1;
+      if (align === 'center') textX = x + (width / 2);
+      if (align === 'right') textX = x + width - 1;
+      
+      doc.text(value, textX, y + height - 1.5, { align: align === 'left' ? undefined : align });
+    }
+  };
+
+  const drawSectionTitle = (title: string, yPos: number) => {
+    doc.setFontSize(6.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, m, yPos);
+  };
+
+  // ==================== CABEÇALHO ====================
+  const headerHeight = 25;
+  
+  // Bloco Empresa (50%)
+  doc.rect(m, y, w * 0.50, headerHeight);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text(dados.empresa.nome.toUpperCase(), m + (w * 0.50)/2, y + 7, { align: 'center' });
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${dados.empresa.endereco}, ${dados.empresa.numero} - ${dados.empresa.bairro}`, m + (w * 0.50)/2, y + 12, { align: 'center' });
+  doc.text(`${dados.empresa.cidade}/${dados.empresa.estado} - CEP: ${dados.empresa.cep}`, m + (w * 0.50)/2, y + 16, { align: 'center' });
+  if (dados.empresa.telefone) {
+    doc.text(`Telefone: ${dados.empresa.telefone}`, m + (w * 0.50)/2, y + 20, { align: 'center' });
+  }
+
+  // Bloco Título (50%)
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LISTA DE COMPRAS', m + w * 0.50 + (w * 0.50)/2, y + 8, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Documento para controle interno', m + w * 0.50 + (w * 0.50)/2, y + 13, { align: 'center' });
+  doc.text('e aquisição de mercadorias', m + w * 0.50 + (w * 0.50)/2, y + 17, { align: 'center' });
+  
+  // Fundo verde claro para destacar
+  doc.setFillColor(220, 255, 220);
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight, 'FD');
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight);
+  
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 100, 0);
+  doc.text('LISTA DE COMPRAS', m + w * 0.50 + (w * 0.50)/2, y + 8, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('Documento para controle interno', m + w * 0.50 + (w * 0.50)/2, y + 13, { align: 'center' });
+  doc.text('e aquisição de mercadorias', m + w * 0.50 + (w * 0.50)/2, y + 17, { align: 'center' });
+
+  y += headerHeight;
+  y += 2;
+
+  // ==================== INFORMAÇÕES GERAIS ====================
+  drawSectionTitle('INFORMAÇÕES GERAIS', y + 2.5);
+  y += 3.5;
+
+  const vendasStr = dados.vendas_ids.length <= 10 
+    ? dados.vendas_ids.map(id => `#${id}`).join(', ')
+    : `${dados.vendas_ids.slice(0, 10).map(id => `#${id}`).join(', ')}... e mais ${dados.vendas_ids.length - 10} vendas`;
+
+  drawDanfeBox(m, y, w * 0.30, 7, 'DATA DE EMISSÃO', dataFormatada);
+  drawDanfeBox(m + w * 0.30, y, w * 0.20, 7, 'HORA', horaFormatada);
+  drawDanfeBox(m + w * 0.50, y, w * 0.25, 7, 'TOTAL DE VENDAS', String(dados.total_vendas));
+  drawDanfeBox(m + w * 0.75, y, w * 0.25, 7, 'TOTAL DE ITENS', String(dados.total_itens), 'right');
+  y += 7;
+
+  drawDanfeBox(m, y, w * 0.80, 7, 'VENDAS SELECIONADAS', vendasStr);
+  drawDanfeBox(m + w * 0.80, y, w * 0.20, 7, 'CNPJ', dados.empresa.cnpj);
+  y += 7;
+
+  // ==================== RESUMO ====================
+  y += 2;
+  drawSectionTitle('RESUMO DA LISTA', y + 2.5);
+  y += 3.5;
+
+  // Tabela de resumo com totais
+  const resumoData = [
+    ['Total de Vendas', String(dados.total_vendas), '-'],
+    ['Total de Itens Únicos', String(dados.total_itens), '-'],
+    ['Data de Geração', dataFormatada, horaFormatada],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    head: [['DESCRIÇÃO', 'QUANTIDADE', 'OBSERVAÇÃO']],
+    body: resumoData,
+    theme: 'grid',
+    styles: {
+      fontSize: 8,
+      font: 'helvetica',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
+      cellPadding: 2,
+    },
+    headStyles: {
+      fillColor: [100, 180, 100],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: w * 0.50 },
+      1: { cellWidth: w * 0.20, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: w * 0.30, halign: 'center' },
+    },
+    margin: { left: m, right: m },
+  });
+
+  // @ts-ignore
+  y = doc.lastAutoTable.finalY + 6;
+
+  // ==================== LISTA DE PRODUTOS ====================
+  drawSectionTitle('PRODUTOS PARA COMPRAR', y + 2.5);
+  y += 3.5;
+
+  const tableData = dados.itens.map((item) => [
+    item.codigo,
+    item.descricao,
+    item.unidade_medida,
+    { content: Number(item.quantidade_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 }), styles: { fontStyle: 'bold', fontSize: 9 } },
+    item.vendas_origem.length <= 3 
+      ? item.vendas_origem.map(id => `#${id}`).join(', ')
+      : `${item.vendas_origem.slice(0, 3).map(id => `#${id}`).join(', ')}... +${item.vendas_origem.length - 3}`,
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['CÓD.', 'DESCRIÇÃO DO PRODUTO', 'UNID.', 'QTD. TOTAL', 'VENDAS ORIGEM']],
+    body: tableData,
+    theme: 'grid',
+    styles: {
+      fontSize: 7.5,
+      font: 'helvetica',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
+      cellPadding: 1.5,
+    },
+    headStyles: {
+      fillColor: [245, 245, 245],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: w * 0.12, halign: 'center' },
+      1: { cellWidth: 'auto' },
+      2: { cellWidth: w * 0.08, halign: 'center' },
+      3: { cellWidth: w * 0.12, halign: 'right', fontStyle: 'bold', fillColor: [255, 255, 220] },
+      4: { cellWidth: w * 0.18, halign: 'center', fontSize: 6.5 },
+    },
+    margin: { left: m, right: m },
+    didParseCell: (data) => {
+      // Destacar a coluna de quantidade total
+      if (data.section === 'body' && data.column.index === 3) {
+        data.cell.styles.fillColor = [255, 255, 220];
+        data.cell.styles.fontStyle = 'bold';
+      }
+    },
+  });
+
+  // @ts-ignore
+  y = doc.lastAutoTable.finalY + 6;
+
+  // ==================== DADOS ADICIONAIS ====================
+  if (y + 25 > 297 - m) {
+    doc.addPage();
+    y = m;
+  }
+
+  drawSectionTitle('OBSERVAÇÕES', y + 2.5);
+  y += 3.5;
+  
+  doc.setFillColor(255, 255, 240);
+  doc.rect(m, y, w, 20, 'FD');
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(m, y, w, 20);
+  
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('DOCUMENTO PARA USO INTERNO - LISTA DE COMPRAS', m + 1, y + 4);
+  doc.text('Utilize esta lista para conferência e aquisição dos produtos necessários.', m + 1, y + 8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ESTE DOCUMENTO NÃO SUBSTITUI A NOTA FISCAL.', m + 1, y + 13);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Gerado em: ${dataFormatada} às ${horaFormatada}`, m + 1, y + 17);
+
+  y += 22;
+
+  // ==================== RODAPÉ ====================
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(100, 100, 100);
+  doc.text('Documento gerado pelo sistema Order Flow - Para uso interno', m + w / 2, 290, { align: 'center' });
+
+  return doc;
+};
+
+/**
+ * Função utilitária para consolidar itens de múltiplas vendas
+ * Agrupa produtos iguais e soma as quantidades
+ */
+export function consolidarItensVendas(
+  vendas: Array<{ id: number; itens?: Array<{ produto_id: number; quantidade: number; descricao?: string; codigo_interno?: string; unidade_medida?: string }> }>
+): ItemListaCompras[] {
+  const mapaItens = new Map<number, ItemListaCompras>();
+
+  vendas.forEach(venda => {
+    if (!venda.itens) return;
+    
+    venda.itens.forEach(item => {
+      const produtoId = item.produto_id;
+      const existing = mapaItens.get(produtoId);
+      
+      if (existing) {
+        existing.quantidade_total += item.quantidade;
+        if (!existing.vendas_origem.includes(venda.id)) {
+          existing.vendas_origem.push(venda.id);
+        }
+      } else {
+        mapaItens.set(produtoId, {
+          codigo: item.codigo_interno || String(produtoId),
+          descricao: item.descricao || `Produto ${produtoId}`,
+          quantidade_total: item.quantidade,
+          unidade_medida: item.unidade_medida || 'UN',
+          vendas_origem: [venda.id],
+        });
+      }
+    });
+  });
+
+  return Array.from(mapaItens.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
+}

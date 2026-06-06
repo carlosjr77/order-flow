@@ -4,8 +4,8 @@ import { apiClient } from '../services/api';
 import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, DownloadCloud, Printer } from 'lucide-react';
-import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
+import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square } from 'lucide-react';
+import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas } from '../utils/gerarComprovante';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,6 +13,8 @@ export const VendasPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<Venda | null>(null);
   const [empresaDados, setEmpresaDados] = useState<DadosEmpresa | null>(null);
+  const [selectedVendasIds, setSelectedVendasIds] = useState<number[]>([]);
+  const [isGeneratingLista, setIsGeneratingLista] = useState(false);
 
   // Dados padrão em caso de nenhuma empresa cadastrada
   const dadosEmpresaPadrao: DadosEmpresa = {
@@ -120,6 +122,60 @@ export const VendasPage: React.FC = () => {
     }
   };
 
+  const toggleSelecaoVenda = (vendaId: number) => {
+    setSelectedVendasIds(prev => 
+      prev.includes(vendaId) 
+        ? prev.filter(id => id !== vendaId)
+        : [...prev, vendaId]
+    );
+  };
+
+  const selecionarTodas = () => {
+    if (selectedVendasIds.length === vendas.length) {
+      setSelectedVendasIds([]);
+    } else {
+      setSelectedVendasIds(vendas.map(v => v.id));
+    }
+  };
+
+  const gerarListaComprasPDF = async () => {
+    if (selectedVendasIds.length < 1) {
+      alert('Selecione pelo menos uma venda para gerar a lista de compras.');
+      return;
+    }
+
+    setIsGeneratingLista(true);
+    try {
+      // Buscar detalhes completos de todas as vendas selecionadas
+      const vendasDetalhes = await Promise.all(
+        selectedVendasIds.map(id => apiClient.obterVenda(id))
+      );
+
+      // Consolidar itens
+      const itensConsolidados = consolidarItensVendas(vendasDetalhes);
+
+      const dadosListaCompras = {
+        empresa: empresaDados || dadosEmpresaPadrao,
+        itens: itensConsolidados,
+        vendas_ids: selectedVendasIds,
+        data_geracao: new Date(),
+        total_vendas: selectedVendasIds.length,
+        total_itens: itensConsolidados.length,
+      };
+
+      const pdf = await gerarListaCompras(dadosListaCompras);
+      pdf.save(`Lista_Compras_${new Date().getTime()}.pdf`);
+      
+      // Limpar seleção após gerar
+      setSelectedVendasIds([]);
+    } catch (error) {
+      console.error('Erro ao gerar lista de compras:', error);
+      alert('Erro ao gerar lista de compras. Tente novamente.');
+    } finally {
+      setIsGeneratingLista(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
@@ -144,82 +200,140 @@ export const VendasPage: React.FC = () => {
             Nenhuma venda encontrada
           </Card>
         ) : (
-          <div className="space-y-4">
-            {vendas.map((venda) => (
-              <Card key={venda.id} className="p-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="font-bold text-lg text-gray-900">Pedido #{venda.id}</h3>
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(venda.status)}`}>
-                        {venda.status}
-                      </span>
+          <>
+            {/* Barra de ferramentas com seleção múltipla */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant={selectedVendasIds.length === vendas.length ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={selecionarTodas}
+                  className={selectedVendasIds.length === vendas.length ? 'bg-green-600 hover:bg-green-700' : ''}
+                >
+                  {selectedVendasIds.length === vendas.length ? (
+                    <CheckSquare2 className="w-4 h-4 mr-1" />
+                  ) : (
+                    <Square className="w-4 h-4 mr-1" />
+                  )}
+                  {selectedVendasIds.length === vendas.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                </Button>
+                {selectedVendasIds.length > 0 && (
+                  <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                    {selectedVendasIds.length} venda(s) selecionada(s)
+                  </span>
+                )}
+              </div>
+              
+              {selectedVendasIds.length > 0 && (
+                <Button
+                  onClick={gerarListaComprasPDF}
+                  disabled={isGeneratingLista}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  {isGeneratingLista ? 'Gerando...' : `Gerar Lista de Compras (${selectedVendasIds.length})`}
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              {vendas.map((venda) => (
+                <Card 
+                  key={venda.id} 
+                  className={`p-4 transition-all duration-200 ${
+                    selectedVendasIds.includes(venda.id) 
+                      ? 'ring-2 ring-emerald-500 bg-emerald-50' 
+                      : ''
+                  }`}
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="flex items-start gap-3 flex-1">
+                      {/* Checkbox de seleção */}
+                      <button
+                        onClick={() => toggleSelecaoVenda(venda.id)}
+                        className="mt-1 flex-shrink-0"
+                      >
+                        {selectedVendasIds.includes(venda.id) ? (
+                          <CheckSquare2 className="w-5 h-5 text-emerald-600" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                        )}
+                      </button>
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <h3 className="font-bold text-lg text-gray-900">Pedido #{venda.id}</h3>
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(venda.status)}`}>
+                            {venda.status}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          Data: {new Date(venda.data_venda).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
+                        {venda.forma_pagamento && (
+                          <p className="text-sm text-gray-600">Pagamento: {venda.forma_pagamento}</p>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-sm text-gray-600">
-                      Data: {new Date(venda.data_venda).toLocaleDateString('pt-BR', {
-                        day: '2-digit',
-                        month: '2-digit',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                    {venda.forma_pagamento && (
-                      <p className="text-sm text-gray-600">Pagamento: {venda.forma_pagamento}</p>
+
+                    <div className="text-right">
+                      <p className="text-2xl font-bold text-blue-600">
+                        R$ {venda.valor_total.toFixed(2)}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {venda.itens?.length || 0} itens
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="mt-4 flex gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedVenda(venda)}
+                    >
+                      <Eye className="w-4 h-4 mr-1" />
+                      Ver Detalhes
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => downloadComprovante(venda)}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <DownloadCloud className="w-4 h-4 mr-1" />
+                      Baixar PDF
+                    </Button>
+                    {venda.status === 'pendente' && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() => concluirVenda(venda.id)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Concluir
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => cancelarVenda(venda.id)}
+                          variant="outline"
+                          className="text-red-600"
+                        >
+                          Cancelar
+                        </Button>
+                      </>
                     )}
                   </div>
-
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-blue-600">
-                      R$ {venda.valor_total.toFixed(2)}
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      {venda.itens?.length || 0} itens
-                    </p>
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="mt-4 flex gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedVenda(venda)}
-                  >
-                    <Eye className="w-4 h-4 mr-1" />
-                    Ver Detalhes
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => downloadComprovante(venda)}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    <DownloadCloud className="w-4 h-4 mr-1" />
-                    Baixar PDF
-                  </Button>
-                  {venda.status === 'pendente' && (
-                    <>
-                      <Button
-                        size="sm"
-                        onClick={() => concluirVenda(venda.id)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        Concluir
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => cancelarVenda(venda.id)}
-                        variant="outline"
-                        className="text-red-600"
-                      >
-                        Cancelar
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
+                </Card>
+              ))}
+            </div>
+          </>
         )}
 
         {/* Modal de Detalhes */}
