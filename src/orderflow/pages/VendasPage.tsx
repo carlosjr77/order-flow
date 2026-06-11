@@ -4,8 +4,8 @@ import { apiClient } from '../services/api';
 import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square } from 'lucide-react';
-import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas } from '../utils/gerarComprovante';
+import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Undo } from 'lucide-react';
+import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ export const VendasPage: React.FC = () => {
   const [empresaDados, setEmpresaDados] = useState<DadosEmpresa | null>(null);
   const [selectedVendasIds, setSelectedVendasIds] = useState<number[]>([]);
   const [isGeneratingLista, setIsGeneratingLista] = useState(false);
+  const [isGeneratingRelatorio, setIsGeneratingRelatorio] = useState(false);
 
   // Dados padrão em caso de nenhuma empresa cadastrada
   const dadosEmpresaPadrao: DadosEmpresa = {
@@ -109,6 +110,17 @@ export const VendasPage: React.FC = () => {
     }
   };
 
+  const excluirVenda = async (vendaId: number) => {
+    if (confirm('Tem certeza que deseja excluir esta venda? Ela sera removida da lista, mas os dados permanecerão no banco para relatórios.')) {
+      try {
+        await apiClient.excluirVenda(vendaId);
+        loadVendas();
+      } catch (error) {
+        console.error('Erro ao excluir venda:', error);
+      }
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'concluído':
@@ -176,6 +188,197 @@ export const VendasPage: React.FC = () => {
     }
   };
 
+  const gerarRelatorioFinanceiroPDF = async () => {
+    if (selectedVendasIds.length < 1) {
+      alert('Selecione pelo menos uma venda para gerar o relatório financeiro.');
+      return;
+    }
+
+    setIsGeneratingRelatorio(true);
+    try {
+      // Buscar detalhes completos de todas as vendas selecionadas
+      // Nota: API ja filtra vendas excluidas (deleted_at) no endpoint obterVenda
+      // Para relatorio, precisamos incluir vendas excluidas tambem
+      const vendasDetalhes: any[] = await Promise.all(
+        selectedVendasIds.map(id => 
+          apiClient.request(`/api/vendas/${id}?include_deleted=true`, 'GET')
+        )
+      );
+
+      // Calcular totais de venda
+      const totalBruto = vendasDetalhes.reduce((sum, v) => sum + Number(v.valor_total), 0);
+      const totalFrete = vendasDetalhes.reduce((sum, v) => sum + (Number(v.valor_frete) || 0), 0);
+      const totalVendasSemFrete = totalBruto - totalFrete;
+
+      // Calcular total de custo e lucro
+      let totalCusto = 0;
+
+      console.log('=== DEBUG VENDAS ===');
+      vendasDetalhes.forEach((v: any) => {
+        console.log('Venda:', v.id, 'Itens:', v.itens?.length);
+        if (v.itens && v.itens.length > 0) {
+          v.itens.forEach((item: any) => {
+            console.log('  Item:', item.descricao, 'preco_custo:', item.preco_custo, 'qtd:', item.quantidade);
+            const custoItem = (item.preco_custo || 0) * Number(item.quantidade);
+            totalCusto += custoItem;
+          });
+        }
+      });
+      console.log('Total Custo:', totalCusto);
+
+      // Lucro = Total das vendas (com frete) - Total do custo dos produtos
+      const totalLucro = totalBruto - totalCusto;
+      // Margem = Lucro / Total das vendas (com frete) * 100
+      const margemPercentual = totalBruto > 0 ? (totalLucro / totalBruto) * 100 : 0;
+      const totalLiquido = totalVendasSemFrete;
+
+      // Resumo por status com lucro
+      const resumoPorStatus: any = {
+        concluido: { quantidade: 0, valor: 0, lucro: 0 },
+        pendente: { quantidade: 0, valor: 0, lucro: 0 },
+        cancelado: { quantidade: 0, valor: 0, lucro: 0 },
+      };
+
+      vendasDetalhes.forEach((v: any) => {
+        const status = String(v.status).toLowerCase();
+        let lucroVenda = Number(v.valor_total);
+        
+        // Calcular custo da venda
+        if (v.itens && v.itens.length > 0) {
+          const custoVenda = v.itens.reduce((sum: number, item: any) => {
+            return sum + ((item.preco_custo || 0) * Number(item.quantidade));
+          }, 0);
+          lucroVenda -= custoVenda;
+        }
+
+        if (status === 'concluído' || status === 'concluido') {
+          resumoPorStatus.concluido.quantidade++;
+          resumoPorStatus.concluido.valor += Number(v.valor_total);
+          resumoPorStatus.concluido.lucro += lucroVenda;
+        } else if (status === 'pendente') {
+          resumoPorStatus.pendente.quantidade++;
+          resumoPorStatus.pendente.valor += Number(v.valor_total);
+          resumoPorStatus.pendente.lucro += lucroVenda;
+        } else if (status === 'cancelado') {
+          resumoPorStatus.cancelado.quantidade++;
+          resumoPorStatus.cancelado.valor += Number(v.valor_total);
+          resumoPorStatus.cancelado.lucro += lucroVenda;
+        }
+      });
+
+      // Resumo por forma de pagamento com lucro
+      const resumoPorPagamentoMap = new Map<string, { quantidade: number; valor: number; lucro: number }>();
+      vendasDetalhes.forEach((v: any) => {
+        const forma = v.forma_pagamento || 'Não informada';
+        let lucroVenda = Number(v.valor_total);
+        
+        // Calcular custo da venda
+        if (v.itens && v.itens.length > 0) {
+          const custoVenda = v.itens.reduce((sum: number, item: any) => {
+            return sum + ((item.preco_custo || 0) * Number(item.quantidade));
+          }, 0);
+          lucroVenda -= custoVenda;
+        }
+
+        const existing = resumoPorPagamentoMap.get(forma) || { quantidade: 0, valor: 0, lucro: 0 };
+        existing.quantidade++;
+        existing.valor += Number(v.valor_total);
+        existing.lucro += lucroVenda;
+        resumoPorPagamentoMap.set(forma, existing);
+      });
+
+      const resumoPorPagamento = Array.from(resumoPorPagamentoMap.entries()).map(([forma, dados]) => ({
+        forma,
+        ...dados,
+      }));
+
+      // Encontrar data de inicio e fim
+      const datas = vendasDetalhes.map((v: any) => new Date(v.data_venda));
+      const dataInicio = new Date(Math.min(...datas.map((d: Date) => d.getTime())));
+      const dataFim = new Date(Math.max(...datas.map((d: Date) => d.getTime())));
+
+      // Consolidar produtos (similar a lista de compras, mas com precos)
+      const produtosMap = new Map<number, {
+        codigo: string;
+        descricao: string;
+        quantidade_total: number;
+        custo_total: number;
+        venda_total: number;
+        preco_custo_soma: number;
+        preco_venda_soma: number;
+      }>();
+
+      vendasDetalhes.forEach((v: any) => {
+        if (v.itens && v.itens.length > 0) {
+          v.itens.forEach((item: any) => {
+            const produtoId = item.produto_id;
+            const existing = produtosMap.get(produtoId) || {
+              codigo: item.codigo_interno || String(produtoId),
+              descricao: item.descricao || `Produto ${produtoId}`,
+              quantidade_total: 0,
+              custo_total: 0,
+              venda_total: 0,
+              preco_custo_soma: 0,
+              preco_venda_soma: 0,
+            };
+            
+            const qtd = Number(item.quantidade);
+            const custoItem = (item.preco_custo || 0) * qtd;
+            const vendaItem = (item.valor_unitario || 0) * qtd;
+            
+            existing.quantidade_total += qtd;
+            existing.custo_total += custoItem;
+            existing.venda_total += vendaItem;
+            existing.preco_custo_soma += item.preco_custo || 0;
+            existing.preco_venda_soma += item.valor_unitario || 0;
+            
+            produtosMap.set(produtoId, existing);
+          });
+        }
+      });
+
+      const produtosConsolidados = Array.from(produtosMap.entries()).map(([id, prod]) => ({
+        codigo: prod.codigo,
+        descricao: prod.descricao,
+        quantidade_total: prod.quantidade_total,
+        preco_custo_medio: prod.quantidade_total > 0 ? prod.preco_custo_soma / prod.quantidade_total : 0,
+        preco_venda_medio: prod.quantidade_total > 0 ? prod.preco_venda_soma / prod.quantidade_total : 0,
+        custo_total: prod.custo_total,
+        venda_total: prod.venda_total,
+        lucro_total: prod.venda_total - prod.custo_total,
+      })).sort((a, b) => b.venda_total - a.venda_total); // Ordenar por maior venda total
+
+      const dadosRelatorio: DadosRelatorioFinanceiro = {
+        empresa: empresaDados || dadosEmpresaPadrao,
+        vendas: vendasDetalhes,
+        produtos_consolidados: produtosConsolidados,
+        data_inicio: dataInicio,
+        data_fim: dataFim,
+        data_geracao: new Date(),
+        total_vendas: selectedVendasIds.length,
+        total_bruto: totalBruto,
+        total_frete: totalFrete,
+        total_liquido: totalLiquido,
+        total_custo: totalCusto,
+        total_lucro: totalLucro,
+        margem_percentual: margemPercentual,
+        resumo_por_status: resumoPorStatus,
+        resumo_por_pagamento: resumoPorPagamento,
+      };
+
+      const pdf = await gerarRelatorioFinanceiro(dadosRelatorio);
+      pdf.save(`Relatorio_Financeiro_${new Date().getTime()}.pdf`);
+      
+      // Limpar seleção após gerar
+      setSelectedVendasIds([]);
+    } catch (error) {
+      console.error('Erro ao gerar relatório financeiro:', error);
+      alert('Erro ao gerar relatório financeiro. Tente novamente.');
+    } finally {
+      setIsGeneratingRelatorio(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       {/* Header */}
@@ -225,14 +428,24 @@ export const VendasPage: React.FC = () => {
               </div>
               
               {selectedVendasIds.length > 0 && (
-                <Button
-                  onClick={gerarListaComprasPDF}
-                  disabled={isGeneratingLista}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                >
-                  <ShoppingCart className="w-4 h-4 mr-2" />
-                  {isGeneratingLista ? 'Gerando...' : `Gerar Lista de Compras (${selectedVendasIds.length})`}
-                </Button>
+                <>
+                  <Button
+                    onClick={gerarListaComprasPDF}
+                    disabled={isGeneratingLista}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-2" />
+                    {isGeneratingLista ? 'Gerando...' : `Lista de Compras (${selectedVendasIds.length})`}
+                  </Button>
+                  <Button
+                    onClick={gerarRelatorioFinanceiroPDF}
+                    disabled={isGeneratingRelatorio}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <DownloadCloud className="w-4 h-4 mr-2" />
+                    {isGeneratingRelatorio ? 'Gerando...' : `Rel. Financeiro (${selectedVendasIds.length})`}
+                  </Button>
+                </>
               )}
             </div>
 
@@ -329,6 +542,15 @@ export const VendasPage: React.FC = () => {
                         </Button>
                       </>
                     )}
+                    <Button
+                      size="sm"
+                      onClick={() => excluirVenda(venda.id)}
+                      variant="outline"
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Excluir
+                    </Button>
                   </div>
                 </Card>
               ))}

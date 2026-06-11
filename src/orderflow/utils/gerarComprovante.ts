@@ -628,3 +628,508 @@ export function consolidarItensVendas(
 
   return Array.from(mapaItens.values()).sort((a, b) => a.descricao.localeCompare(b.descricao));
 }
+
+/**
+ * Interface para o relatorio financeiro
+ */
+export interface DadosRelatorioFinanceiro {
+  empresa: {
+    nome: string;
+    cnpj: string;
+    endereco: string;
+    numero: string;
+    bairro: string;
+    cidade: string;
+    estado: string;
+    cep: string;
+    telefone?: string;
+  };
+  vendas: Array<{
+    id: number;
+    data_venda: string;
+    status: string;
+    forma_pagamento: string;
+    valor_total: number;
+    valor_frete?: number;
+    itens?: Array<{
+      produto_id: number;
+      quantidade: number;
+      valor_unitario: number;
+      valor_total: number;
+      descricao?: string;
+      preco_custo?: number;
+      codigo_interno?: string;
+    }>;
+  }>;
+  produtos_consolidados?: Array<{
+    codigo: string;
+    descricao: string;
+    quantidade_total: number;
+    preco_custo_medio: number;
+    preco_venda_medio: number;
+    custo_total: number;
+    venda_total: number;
+    lucro_total: number;
+  }>;
+  data_inicio: Date;
+  data_fim: Date;
+  data_geracao: Date;
+  total_vendas: number;
+  total_bruto: number;
+  total_frete: number;
+  total_liquido: number;
+  total_custo: number;
+  total_lucro: number;
+  margem_percentual: number;
+  resumo_por_status: {
+    concluido: { quantidade: number; valor: number; lucro: number };
+    pendente: { quantidade: number; valor: number; lucro: number };
+    cancelado: { quantidade: number; valor: number; lucro: number };
+  };
+  resumo_por_pagamento: Array<{
+    forma: string;
+    quantidade: number;
+    valor: number;
+    lucro: number;
+  }>;
+}
+
+/**
+ * Gera um PDF de relatorio financeiro baseado em multiplas vendas selecionadas.
+ * Este documento apresenta um resumo financeiro detalhado das vendas com dashboard completo.
+ */
+export const gerarRelatorioFinanceiro = async (dados: DadosRelatorioFinanceiro): Promise<jsPDF> => {
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const m = 5; // Margem padrao (5mm)
+  const w = 200; // Largura utilizavel (210 - 5 - 5)
+  let y = m;
+
+  const dataInicioFormatada = dados.data_inicio.toLocaleDateString('pt-BR');
+  const dataFimFormatada = dados.data_fim.toLocaleDateString('pt-BR');
+  const dataGeracaoFormatada = dados.data_geracao.toLocaleDateString('pt-BR');
+  const horaGeracaoFormatada = dados.data_geracao.toLocaleTimeString('pt-BR').slice(0, 5);
+  const margemStr = dados.margem_percentual.toFixed(2).replace('.', ',') + '%';
+
+  // Funcoes utilitarias de desenho
+  const drawDanfeBox = (x: number, yPos: number, width: number, height: number, label: string, value: string, align: 'left'|'center'|'right' = 'left', isHighlighted = false) => {
+    doc.setDrawColor(0, 0, 0);
+    if (isHighlighted) {
+      doc.setFillColor(220, 255, 220);
+      doc.rect(x, yPos, width, height, 'FD');
+    } else {
+      doc.rect(x, yPos, width, height);
+    }
+    
+    if (label) {
+      doc.setFontSize(5.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(label, x + 1, yPos + 2.5);
+    }
+    
+    if (value) {
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      
+      let textX = x + 1;
+      if (align === 'center') textX = x + (width / 2);
+      if (align === 'right') textX = x + width - 1;
+      
+      doc.text(value, textX, yPos + height - 1.5, { align: align === 'left' ? undefined : align });
+    }
+  };
+
+  const drawSectionTitle = (title: string, yPos: number) => {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, m, yPos);
+  };
+
+  // ==================== CABECALHO ====================
+  const headerHeight = 25;
+  
+  // Bloco Empresa (50%)
+  doc.rect(m, y, w * 0.50, headerHeight);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text(dados.empresa.nome.toUpperCase(), m + (w * 0.50)/2, y + 7, { align: 'center' });
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`${dados.empresa.endereco}, ${dados.empresa.numero} - ${dados.empresa.bairro}`, m + (w * 0.50)/2, y + 12, { align: 'center' });
+  doc.text(`${dados.empresa.cidade}/${dados.empresa.estado} - CEP: ${dados.empresa.cep}`, m + (w * 0.50)/2, y + 16, { align: 'center' });
+  if (dados.empresa.telefone) {
+    doc.text(`Telefone: ${dados.empresa.telefone}`, m + (w * 0.50)/2, y + 20, { align: 'center' });
+  }
+
+  // Bloco Titulo (50%)
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight);
+  
+  // Fundo azul claro para destacar
+  doc.setFillColor(220, 230, 255);
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight, 'FD');
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(m + w * 0.50, y, w * 0.50, headerHeight);
+  
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 50, 150);
+  doc.text('RELATÓRIO FINANCEIRO', m + w * 0.50 + (w * 0.50)/2, y + 10, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('Dashboard de Vendas e Lucratividade', m + w * 0.50 + (w * 0.50)/2, y + 16, { align: 'center' });
+  doc.text(`Período: ${dataInicioFormatada} a ${dataFimFormatada}`, m + w * 0.50 + (w * 0.50)/2, y + 21, { align: 'center' });
+
+  y += headerHeight;
+  y += 3;
+
+  // ==================== DASHBOARD PRINCIPAL ====================
+  drawSectionTitle('DASHBOARD FINANCEIRO', y + 3);
+  y += 5;
+
+  // Linha 1 - Indicadores principais
+  const indicatorHeight = 12;
+  
+  // Total Vendas
+  doc.setFillColor(230, 240, 255);
+  doc.rect(m, y, w * 0.25, indicatorHeight, 'FD');
+  doc.rect(m, y, w * 0.25, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.text('TOTAL DE VENDAS', m + (w * 0.25)/2, y + 3, { align: 'center' });
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 50, 150);
+  doc.text(String(dados.total_vendas), m + (w * 0.25)/2, y + 8, { align: 'center' });
+
+  // Total Bruto
+  doc.setFillColor(255, 255, 220);
+  doc.rect(m + w * 0.25, y, w * 0.25, indicatorHeight, 'FD');
+  doc.rect(m + w * 0.25, y, w * 0.25, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL BRUTO', m + w * 0.25 + (w * 0.25)/2, y + 3, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 100, 0);
+  doc.text(fmtMoney(dados.total_bruto), m + w * 0.25 + (w * 0.25)/2, y + 8, { align: 'center' });
+
+  // Total Custo
+  doc.setFillColor(255, 230, 230);
+  doc.rect(m + w * 0.50, y, w * 0.25, indicatorHeight, 'FD');
+  doc.rect(m + w * 0.50, y, w * 0.25, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL CUSTO', m + w * 0.50 + (w * 0.25)/2, y + 3, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(150, 0, 0);
+  doc.text(fmtMoney(dados.total_custo), m + w * 0.50 + (w * 0.25)/2, y + 8, { align: 'center' });
+
+  // Total Lucro
+  doc.setFillColor(220, 255, 220);
+  doc.rect(m + w * 0.75, y, w * 0.25, indicatorHeight, 'FD');
+  doc.rect(m + w * 0.75, y, w * 0.25, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL LUCRO', m + w * 0.75 + (w * 0.25)/2, y + 3, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 150, 0);
+  doc.text(fmtMoney(dados.total_lucro), m + w * 0.75 + (w * 0.25)/2, y + 8, { align: 'center' });
+
+  y += indicatorHeight + 2;
+
+  // Linha 2 - Indicadores secundarios
+  // Margem
+  doc.setFillColor(240, 230, 255);
+  doc.rect(m, y, w * 0.33, indicatorHeight, 'FD');
+  doc.rect(m, y, w * 0.33, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('MARGEM DE LUCRO', m + (w * 0.33)/2, y + 3, { align: 'center' });
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(100, 0, 150);
+  doc.text(margemStr, m + (w * 0.33)/2, y + 8, { align: 'center' });
+
+  // Total Frete
+  doc.setFillColor(230, 245, 255);
+  doc.rect(m + w * 0.33, y, w * 0.34, indicatorHeight, 'FD');
+  doc.rect(m + w * 0.33, y, w * 0.34, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL FRETE', m + w * 0.33 + (w * 0.34)/2, y + 3, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 80, 150);
+  doc.text(fmtMoney(dados.total_frete), m + w * 0.33 + (w * 0.34)/2, y + 8, { align: 'center' });
+
+  // Total Liquido
+  doc.setFillColor(220, 255, 220);
+  doc.rect(m + w * 0.67, y, w * 0.33, indicatorHeight, 'FD');
+  doc.rect(m + w * 0.67, y, w * 0.33, indicatorHeight);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0);
+  doc.text('TOTAL LÍQUIDO', m + w * 0.67 + (w * 0.33)/2, y + 3, { align: 'center' });
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 150, 0);
+  doc.text(fmtMoney(dados.total_liquido), m + w * 0.67 + (w * 0.33)/2, y + 8, { align: 'center' });
+
+  y += indicatorHeight + 5;
+
+  // ==================== RESUMO POR STATUS ====================
+  drawSectionTitle('RESUMO POR STATUS', y + 3);
+  y += 5;
+
+  const statusData = [
+    ['Concluídas', String(dados.resumo_por_status.concluido.quantidade), fmtMoney(dados.resumo_por_status.concluido.valor), fmtMoney(dados.resumo_por_status.concluido.lucro)],
+    ['Pendentes', String(dados.resumo_por_status.pendente.quantidade), fmtMoney(dados.resumo_por_status.pendente.valor), fmtMoney(dados.resumo_por_status.pendente.lucro)],
+    ['Canceladas', String(dados.resumo_por_status.cancelado.quantidade), fmtMoney(dados.resumo_por_status.cancelado.valor), fmtMoney(dados.resumo_por_status.cancelado.lucro)],
+    ['TOTAL', String(dados.total_vendas), fmtMoney(dados.total_bruto), fmtMoney(dados.total_lucro)],
+  ];
+
+  autoTable(doc, {
+    startY: y,
+    head: [['STATUS', 'QUANTIDADE', 'VALOR TOTAL', 'LUCRO']],
+    body: statusData,
+    theme: 'grid',
+    styles: {
+      fontSize: 8,
+      font: 'helvetica',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
+      cellPadding: 2,
+    },
+    headStyles: {
+      fillColor: [100, 140, 200],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: w * 0.35 },
+      1: { cellWidth: w * 0.15, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: w * 0.25, halign: 'right', fontStyle: 'bold' },
+      3: { cellWidth: w * 0.25, halign: 'right', fontStyle: 'bold' },
+    },
+    margin: { left: m, right: m },
+  });
+
+  // @ts-ignore
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ==================== RESUMO POR FORMA DE PAGAMENTO ====================
+  drawSectionTitle('RESUMO POR FORMA DE PAGAMENTO', y + 3);
+  y += 5;
+
+  const pagamentoData = dados.resumo_por_pagamento.map(item => [
+    item.forma,
+    String(item.quantidade),
+    fmtMoney(item.valor),
+    fmtMoney(item.lucro),
+  ]);
+
+  autoTable(doc, {
+    startY: y,
+    head: [['FORMA DE PAGAMENTO', 'QUANTIDADE', 'VALOR TOTAL', 'LUCRO']],
+    body: pagamentoData,
+    theme: 'grid',
+    styles: {
+      fontSize: 8,
+      font: 'helvetica',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
+      cellPadding: 2,
+    },
+    headStyles: {
+      fillColor: [100, 180, 140],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: w * 0.35 },
+      1: { cellWidth: w * 0.15, halign: 'center', fontStyle: 'bold' },
+      2: { cellWidth: w * 0.25, halign: 'right', fontStyle: 'bold' },
+      3: { cellWidth: w * 0.25, halign: 'right', fontStyle: 'bold' },
+    },
+    margin: { left: m, right: m },
+  });
+
+  // @ts-ignore
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ==================== PRODUTOS MAIS VENDIDOS ====================
+  if (dados.produtos_consolidados && dados.produtos_consolidados.length > 0) {
+    drawSectionTitle('PRODUTOS MAIS VENDIDOS (CONSOLIDADO)', y + 3);
+    y += 5;
+
+    const produtosData = dados.produtos_consolidados.map(prod => [
+      prod.codigo || '-',
+      prod.descricao || '-',
+      String(prod.quantidade_total),
+      fmtMoney(prod.preco_custo_medio),
+      fmtMoney(prod.preco_venda_medio),
+      fmtMoney(prod.custo_total),
+      fmtMoney(prod.venda_total),
+      fmtMoney(prod.lucro_total),
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      head: [['CÓD.', 'PRODUTO', 'QTD', 'CUSTO UNIT', 'VLR UNIT', 'CUSTO TOTAL', 'VLR TOTAL', 'LUCRO']],
+      body: produtosData,
+      theme: 'grid',
+      styles: {
+        fontSize: 6,
+        font: 'helvetica',
+        lineWidth: 0.2,
+        lineColor: [0, 0, 0],
+        textColor: [0, 0, 0],
+        cellPadding: 1,
+      },
+      headStyles: {
+        fillColor: [150, 120, 200],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: w * 0.08, halign: 'center' },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: w * 0.06, halign: 'center', fontStyle: 'bold' },
+        3: { cellWidth: w * 0.10, halign: 'right' },
+        4: { cellWidth: w * 0.10, halign: 'right' },
+        5: { cellWidth: w * 0.12, halign: 'right' },
+        6: { cellWidth: w * 0.12, halign: 'right', fontStyle: 'bold' },
+        7: { cellWidth: w * 0.12, halign: 'right', fontStyle: 'bold' },
+      },
+      didParseCell: (data) => {
+        // Destacar lucro na ultima coluna
+        if (data.section === 'body' && data.column.index === 7) {
+          const value = Number(String(data.cell.raw).replace(/[R$\s.]/g, '').replace(',', '.'));
+          if (value > 0) {
+            data.cell.styles.textColor = [0, 150, 0];
+          } else if (value < 0) {
+            data.cell.styles.textColor = [150, 0, 0];
+          }
+        }
+      },
+      margin: { left: m, right: m },
+    });
+
+    // @ts-ignore
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  // ==================== LISTA DE VENDAS ====================
+  drawSectionTitle('DETALHAMENTO DAS VENDAS', y + 3);
+  y += 5;
+
+  const vendasData = dados.vendas.map(venda => {
+    const dataVenda = new Date(venda.data_venda).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    // Calcular custo e lucro da venda
+    let custoVenda = 0;
+    if (venda.itens && venda.itens.length > 0) {
+      custoVenda = venda.itens.reduce((sum, item) => {
+        const custoItem = (item.preco_custo || 0) * Number(item.quantidade);
+        return sum + custoItem;
+      }, 0);
+    }
+    const lucroVenda = Number(venda.valor_total) - custoVenda;
+    
+    return [
+      `#${venda.id}`,
+      dataVenda,
+      venda.status ? String(venda.status).toUpperCase() : '-',
+      venda.forma_pagamento || '-',
+      fmtMoney(venda.valor_total),
+      fmtMoney(custoVenda),
+      fmtMoney(lucroVenda),
+    ];
+  });
+
+  autoTable(doc, {
+    startY: y,
+    head: [['PEDIDO', 'DATA', 'STATUS', 'PAGAMENTO', 'VLR TOTAL', 'CUSTO', 'LUCRO']],
+    body: vendasData,
+    theme: 'grid',
+    styles: {
+      fontSize: 6.5,
+      font: 'helvetica',
+      lineWidth: 0.2,
+      lineColor: [0, 0, 0],
+      textColor: [0, 0, 0],
+      cellPadding: 1.5,
+    },
+    headStyles: {
+      fillColor: [200, 200, 200],
+      textColor: [0, 0, 0],
+      fontStyle: 'bold',
+    },
+    columnStyles: {
+      0: { cellWidth: w * 0.10, halign: 'center' },
+      1: { cellWidth: w * 0.12, halign: 'center' },
+      2: { cellWidth: w * 0.10, halign: 'center' },
+      3: { cellWidth: w * 0.15, halign: 'center' },
+      4: { cellWidth: w * 0.16, halign: 'right', fontStyle: 'bold' },
+      5: { cellWidth: w * 0.16, halign: 'right' },
+      6: { cellWidth: w * 0.21, halign: 'right', fontStyle: 'bold' },
+    },
+    didParseCell: (data) => {
+      // Destacar lucro na ultima coluna
+      if (data.section === 'body' && data.column.index === 6) {
+        const value = Number(String(data.cell.raw).replace(/[R$\s.]/g, '').replace(',', '.'));
+        if (value > 0) {
+          data.cell.styles.textColor = [0, 150, 0];
+        } else if (value < 0) {
+          data.cell.styles.textColor = [150, 0, 0];
+        }
+      }
+    },
+    margin: { left: m, right: m },
+  });
+
+  // @ts-ignore
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ==================== DADOS ADICIONAIS ====================
+  if (y + 20 > 297 - m) {
+    doc.addPage();
+    y = m;
+  }
+
+  doc.setFillColor(255, 255, 240);
+  doc.rect(m, y, w, 15, 'FD');
+  doc.setDrawColor(0, 0, 0);
+  doc.rect(m, y, w, 15);
+  
+  doc.setFontSize(6.5);
+  doc.setFont('helvetica', 'normal');
+  doc.text('DOCUMENTO PARA USO INTERNO - RELATÓRIO FINANCEIRO', m + 1, y + 4);
+  doc.text('Este relatório apresenta o resumo financeiro e de lucratividade das vendas selecionadas.', m + 1, y + 8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ESTE DOCUMENTO NÃO SUBSTITUI A NOTA FISCAL.', m + 1, y + 12);
+
+  y += 18;
+
+  // ==================== RODAPE ====================
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Gerado em: ${dataGeracaoFormatada} às ${horaGeracaoFormatada}`, m + w / 2, y, { align: 'center' });
+  y += 4;
+  doc.text('Documento gerado pelo sistema Order Flow - Para uso interno', m + w / 2, y, { align: 'center' });
+
+  return doc;
+};

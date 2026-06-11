@@ -1,22 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import { Produto, ItemCarrinho, Venda, DadosEmpresa, Cliente } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle, X } from 'lucide-react';
 import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
 import { useDebounce } from '../hooks/useDebounce';
 import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
+import { calcularPrecoVenda } from '../utils/precoDinamico';
 
 export const PDVPage: React.FC = () => {
   const navigate = useNavigate();
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<(ItemCarrinho & { id: number })[]>([]);
   const [busca, setBusca] = useState('');
-  const buscaDebounced = useDebounce(busca, 500);
+  const buscaDebounced = useDebounce(busca, 300);
   const [isLoading, setIsLoading] = useState(false);
   const [formaPagamento, setFormaPagamento] = useState('');
   const [observacoes, setObservacoes] = useState('');
@@ -68,11 +70,26 @@ export const PDVPage: React.FC = () => {
     loadEmpresaDados();
   }, []);
 
+  // Obter margem geral da empresa (padrão 100% = 1.0)
+  const getMargemGeral = () => {
+    return empresaDados?.margem_lucro_padrao ?? 1.0;
+  };
+
+  // Calcular preço de venda de um produto usando a hierarquia
+  const getPrecoVenda = (produto: Produto): number => {
+    return calcularPrecoVenda(
+      produto.preco_custo,
+      produto.preco_venda,
+      produto.margem_lucro,
+      getMargemGeral()
+    );
+  };
+
   const loadEmpresaDados = async () => {
     try {
       const dados = await apiClient.obterDadosEmpresa();
       if (dados) {
-        setEmpresaDados(dados);
+        setEmpresaDados(dados as DadosEmpresa);
       } else {
         setEmpresaDados(null);
       }
@@ -120,22 +137,28 @@ export const PDVPage: React.FC = () => {
   };
 
   useEffect(() => {
-    loadProdutos();
+    const carregarProdutos = async () => {
+      try {
+        setIsLoading(true);
+        const data = await apiClient.listarProdutos(0, 1000, buscaDebounced || undefined);
+        // Ordenar produtos por ordem alfabética (descricao)
+        const produtosOrdenados = [...data].sort((a, b) =>
+          a.descricao.localeCompare(b.descricao, 'pt-BR')
+        );
+        setProdutos(produtosOrdenados);
+        // Manter o foco no input de busca após carregar
+        setTimeout(() => buscaInputRef.current?.focus(), 0);
+      } catch (error) {
+        console.error('Erro ao carregar produtos:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    carregarProdutos();
   }, [buscaDebounced]);
 
-  const loadProdutos = async () => {
-    try {
-      setIsLoading(true);
-      const data = await apiClient.listarProdutos(0, 1000, buscaDebounced || undefined);
-      setProdutos(data);
-    } catch (error) {
-      console.error('Erro ao carregar produtos:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const adicionarAoCarrinho = (produto: Produto) => {
+    const precoVenda = getPrecoVenda(produto);
     const itemExistente = carrinho.find((item) => item.produto_id === produto.id);
 
     if (itemExistente) {
@@ -161,8 +184,8 @@ export const PDVPage: React.FC = () => {
           unidade_medida: produto.unidade_medida,
           ncm: produto.ncm,
           quantidade: 1,
-          valor_unitario: produto.preco_venda,
-          valor_total: produto.preco_venda,
+          valor_unitario: precoVenda,
+          valor_total: precoVenda,
         },
       ]);
     }
@@ -298,15 +321,6 @@ export const PDVPage: React.FC = () => {
 
     if (!formaPagamento) {
       alert('Selecione a forma de pagamento');
-      return;
-    }
-
-    // Validar cliente - usar selecionado ou preenchido manualmente
-    const temClienteSelecionado = !!clienteSelecionado;
-    const temClientePreenchido = showDadosCliente && dadosCliente.nome.trim();
-    
-    if (!temClienteSelecionado && !temClientePreenchido) {
-      alert('Selecione um cliente ou preencha os dados do cliente!');
       return;
     }
 
@@ -464,8 +478,22 @@ export const PDVPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Card className="mb-6 p-6">
-              <h2 className="text-lg font-bold mb-4">Buscar Produtos</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-lg font-bold flex-1">Buscar Produtos</h2>
+                {busca && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBusca('')}
+                    className="h-8"
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Limpar
+                  </Button>
+                )}
+              </div>
               <Input
+                ref={buscaInputRef}
                 type="text"
                 placeholder="Código ou descrição..."
                 value={busca}
@@ -480,30 +508,33 @@ export const PDVPage: React.FC = () => {
               ) : produtos.length === 0 ? (
                 <p className="text-gray-500">Nenhum produto encontrado</p>
               ) : (
-                produtos.map((produto) => (
-                  <Card
-                    key={produto.id}
-                    className="p-4 cursor-pointer hover:shadow-lg transition-shadow"
-                    onClick={() => adicionarAoCarrinho(produto)}
-                  >
-                    <p className="text-sm font-medium text-gray-500">{produto.codigo_interno}</p>
-                    <h3 className="font-bold text-gray-900 truncate">{produto.descricao}</h3>
-                    <div className="flex justify-between items-center mt-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Estoque</p>
-                        <p className="text-lg font-bold text-green-600">
-                          {produto.estoque_atual} {produto.unidade_medida}
-                        </p>
+                produtos.map((produto) => {
+                  const precoVenda = getPrecoVenda(produto);
+                  return (
+                    <Card
+                      key={produto.id}
+                      className="p-4 cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => adicionarAoCarrinho(produto)}
+                    >
+                      <p className="text-sm font-medium text-gray-500">{produto.codigo_interno}</p>
+                      <h3 className="font-bold text-gray-900 truncate">{produto.descricao}</h3>
+                      <div className="flex justify-between items-center mt-3">
+                        <div>
+                          <p className="text-xs text-gray-500">Estoque</p>
+                          <p className="text-lg font-bold text-green-600">
+                            {produto.estoque_atual} {produto.unidade_medida}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">Preço</p>
+                          <p className="text-lg font-bold text-blue-600">
+                            R$ {precoVenda.toFixed(2)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-xs text-gray-500">Preço</p>
-                        <p className="text-lg font-bold text-blue-600">
-                          R$ {produto.preco_venda.toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                ))
+                    </Card>
+                  );
+                })
               )}
             </div>
           </div>

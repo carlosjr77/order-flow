@@ -20,7 +20,8 @@ export interface Produto {
   codigo_interno: string;
   descricao: string;
   preco_custo: number;
-  preco_venda: number;
+  preco_venda: number | null;  // Pode ser null quando calculado pela margem
+  margem_lucro?: number | null;  // Margem de lucro específica do produto (em decimal, ex: 1.0 = 100%)
   estoque_atual: number;
   unidade_medida: string;
   ncm?: string;
@@ -91,6 +92,7 @@ export interface Cliente {
 }
 
 export interface DadosEmpresa {
+  id?: number;
   nome: string;
   cnpj: string;
   endereco: string;
@@ -102,4 +104,5 @@ export interface DadosEmpresa {
   cep: string;
   telefone?: string;
   email?: string;
+  margem_lucro_padrao?: number | null;  // Margem padrão da empresa (1.0 = 100%)
 }

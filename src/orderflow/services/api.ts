@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.om || 'http://localhost:8000';
 
 export class APIClient {
   private baseURL: string;
@@ -134,6 +134,10 @@ export class APIClient {
 
   async cancelarVenda(id: number) {
     return this.request(`/api/vendas/${id}/cancelar`, 'PUT');
+  }
+
+  async excluirVenda(id: number) {
+    return this.request(`/api/vendas/${id}`, 'DELETE');
   }
 
   // Empresas endpoints
