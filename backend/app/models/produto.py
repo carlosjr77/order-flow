@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, Float, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -11,7 +11,8 @@ class Produto(Base):
     codigo_interno = Column(String(50), unique=True, index=True, nullable=False)
     descricao = Column(String(255), nullable=False, index=True)
     preco_custo = Column(Numeric(10, 2), nullable=False)
-    preco_venda = Column(Numeric(10, 2), nullable=False)
+    preco_venda = Column(Numeric(10, 2), nullable=True)  # Agora opcional, pode ser calculado pela margem
+    margem_lucro = Column(Float, nullable=True)  # Margem de lucro específica do produto (em decimal, ex: 1.0 = 100%)
     estoque_atual = Column(Numeric(10, 3), nullable=False, default=0)
     unidade_medida = Column(String(10), nullable=False, default="UN")  # KG, UN, LT, cx, etc
     ncm = Column(String(8), nullable=True)  # Código NCM

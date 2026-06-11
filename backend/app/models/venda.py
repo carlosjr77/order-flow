@@ -16,6 +16,7 @@ class Venda(Base):
     observacoes = Column(String(255), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime, nullable=True)  # Exclusão lógica
     
     def __repr__(self):
         return f"<Venda(id={self.id}, valor={self.valor_total}, status={self.status})>"

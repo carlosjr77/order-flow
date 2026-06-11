@@ -71,6 +71,7 @@ def criar_produto(
         descricao=produto_data.descricao,
         preco_custo=produto_data.preco_custo,
         preco_venda=produto_data.preco_venda,
+        margem_lucro=produto_data.margem_lucro,
         unidade_medida=produto_data.unidade_medida,
         ncm=produto_data.ncm,
         estoque_atual=produto_data.estoque_inicial or 0,

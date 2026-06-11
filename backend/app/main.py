@@ -40,6 +40,100 @@ def run_migrations():
                 ))
                 conn.commit()
                 print("✅ Migração: coluna 'valor_frete' adicionada em 'vendas'")
+            
+            # Adicionar coluna margem_lucro em produtos se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'produtos' AND column_name = 'margem_lucro'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE produtos ADD COLUMN margem_lucro FLOAT"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'margem_lucro' adicionada em 'produtos'")
+            
+            # Adicionar coluna margem_lucro_padrao em empresas se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'empresas' AND column_name = 'margem_lucro_padrao'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE empresas ADD COLUMN margem_lucro_padrao FLOAT DEFAULT 1.0"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'margem_lucro_padrao' adicionada em 'empresas'")
+            
+            # Remover restrição NOT NULL da coluna preco_venda se existir
+            result = conn.execute(text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'produtos' AND column_name = 'preco_venda'"
+            )).fetchone()
+            
+            if result and result[0] == 'NO':
+                conn.execute(text(
+                    "ALTER TABLE produtos ALTER COLUMN preco_venda DROP NOT NULL"
+                ))
+                conn.commit()
+                print("✅ Migração: restrição NOT NULL removida de 'preco_venda'")
+            
+            # Atualizar restrição de chave estrangeira em itens_venda para CASCADE
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.table_constraints "
+                "WHERE constraint_name = 'itens_venda_produto_id_fkey' AND table_name = 'itens_venda'"
+            )).fetchone()
+            
+            if result[0] > 0:
+                result_cascade = conn.execute(text(
+                    "SELECT delete_rule FROM information_schema.referential_constraints "
+                    "WHERE constraint_name = 'itens_venda_produto_id_fkey'"
+                )).fetchone()
+                
+                if result_cascade and result_cascade[0] != 'CASCADE':
+                    conn.execute(text(
+                        "ALTER TABLE itens_venda DROP CONSTRAINT itens_venda_produto_id_fkey"
+                    ))
+                    conn.execute(text(
+                        "ALTER TABLE itens_venda ADD CONSTRAINT itens_venda_produto_id_fkey "
+                        "FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE"
+                    ))
+                    conn.commit()
+                    print("✅ Migração: restrição CASCADE adicionada em 'itens_venda'")
+                elif result_cascade and result_cascade[0] == 'CASCADE':
+                    print("✅ Migração: restrição CASCADE já existe em 'itens_venda'")
+            
+            # Adicionar coluna deleted_at em vendas se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'vendas' AND column_name = 'deleted_at'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE vendas ADD COLUMN deleted_at TIMESTAMP"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'deleted_at' adicionada em 'vendas'")
+            else:
+                print("✅ Migração: coluna 'deleted_at' já existe em 'vendas'")
+            
+            # Adicionar coluna deleted_at em itens_venda se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'itens_venda' AND column_name = 'deleted_at'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE itens_venda ADD COLUMN deleted_at TIMESTAMP"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'deleted_at' adicionada em 'itens_venda'")
+            else:
+                print("✅ Migração: coluna 'deleted_at' já existe em 'itens_venda'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 

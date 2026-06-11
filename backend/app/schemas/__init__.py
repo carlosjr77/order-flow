@@ -38,7 +38,8 @@ class ProdutoBase(BaseModel):
     codigo_interno: str
     descricao: str
     preco_custo: float
-    preco_venda: float
+    preco_venda: Optional[float] = None  # Opcional, pode ser calculado pela margem
+    margem_lucro: Optional[float] = None  # Margem de lucro específica do produto (em decimal, ex: 1.0 = 100%)
     unidade_medida: str = "UN"
     ncm: Optional[str] = None
     vender_sem_estoque: bool = True  # Default: permite vender sem estoque
@@ -52,6 +53,7 @@ class ProdutoUpdate(BaseModel):
     descricao: Optional[str] = None
     preco_custo: Optional[float] = None
     preco_venda: Optional[float] = None
+    margem_lucro: Optional[float] = None
     unidade_medida: Optional[str] = None
     ncm: Optional[str] = None
     vender_sem_estoque: Optional[bool] = None
@@ -85,6 +87,7 @@ class ItemVendaResponse(ItemVendaBase):
     descricao: Optional[str] = None
     unidade_medida: Optional[str] = None
     ncm: Optional[str] = None
+    preco_custo: Optional[float] = 0  # Preço de custo do produto para relatórios
     
     class Config:
         from_attributes = True
@@ -131,6 +134,7 @@ class EmpresaBase(BaseModel):
     cep: str
     telefone: Optional[str] = None
     email: Optional[str] = None
+    margem_lucro_padrao: Optional[float] = 1.0  # Margem padrão de 100% (1.0 = 100%)
 
 
 class EmpresaCreate(EmpresaBase):
@@ -149,6 +153,7 @@ class EmpresaUpdate(BaseModel):
     cep: Optional[str] = None
     telefone: Optional[str] = None
     email: Optional[str] = None
+    margem_lucro_padrao: Optional[float] = None
 
 
 class EmpresaResponse(EmpresaBase):

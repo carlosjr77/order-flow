@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 from decimal import Decimal
 from app.core.database import get_db
 from app.routes.auth import get_current_user
@@ -15,11 +16,16 @@ def listar_vendas(
     skip: int = 0,
     limit: int = 100,
     status_filter: str = None,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Lista todas as vendas"""
+    """Lista todas as vendas (opcionalmente inclui excluídas)"""
     query = db.query(Venda)
+    
+    # Filtrar vendas não excluídas (a menos que include_deleted=True)
+    if not include_deleted:
+        query = query.filter(Venda.deleted_at.is_(None))
     
     if status_filter:
         query = query.filter(Venda.status == status_filter)
@@ -28,7 +34,11 @@ def listar_vendas(
     
     resultado = []
     for venda in vendas:
-        itens = db.query(ItemVenda).filter(ItemVenda.venda_id == venda.id).all()
+        # Buscar apenas itens não excluídos
+        itens = db.query(ItemVenda).filter(
+            ItemVenda.venda_id == venda.id,
+            ItemVenda.deleted_at.is_(None)
+        ).all()
         resultado.append({
             **{column.name: getattr(venda, column.name) for column in venda.__table__.columns},
             "itens": itens
@@ -40,11 +50,17 @@ def listar_vendas(
 @router.get("/{venda_id}", response_model=VendaDetailResponse)
 def obter_venda(
     venda_id: int,
+    include_deleted: bool = False,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """Obtém uma venda específica com dados completos dos produtos"""
-    venda = db.query(Venda).filter(Venda.id == venda_id).first()
+    query = db.query(Venda).filter(Venda.id == venda_id)
+    
+    if not include_deleted:
+        query = query.filter(Venda.deleted_at.is_(None))
+    
+    venda = query.first()
     
     if not venda:
         raise HTTPException(
@@ -53,9 +69,26 @@ def obter_venda(
         )
     
     # Buscar itens com dados do produto
-    itens = db.query(ItemVenda, Produto).join(
+    query_itens = db.query(ItemVenda, Produto).join(
         Produto, ItemVenda.produto_id == Produto.id
-    ).filter(ItemVenda.venda_id == venda_id).all()
+    ).filter(ItemVenda.venda_id == venda_id)
+    
+    if not include_deleted:
+        query_itens = query_itens.filter(ItemVenda.deleted_at.is_(None))
+    
+    itens = query_itens.all()
+    
+    # Debug: verificar se existem itens excluidos
+    itens_excluidos = db.query(ItemVenda).filter(
+        ItemVenda.venda_id == venda_id,
+        ItemVenda.deleted_at.isnot(None)
+    ).count()
+    if itens_excluidos > 0:
+        print(f"DEBUG: Venda {venda_id} tem {itens_excluidos} itens excluidos logicamente")
+    
+    # Debug: verificar total de itens no banco
+    total_itens = db.query(ItemVenda).filter(ItemVenda.venda_id == venda_id).count()
+    print(f"DEBUG: Venda {venda_id} tem {total_itens} itens no total, {len(itens)} ativos")
     
     # Formatando itens com dados do produto
     itens_formatados = []
@@ -65,6 +98,7 @@ def obter_venda(
         item_dict['descricao'] = produto.descricao
         item_dict['unidade_medida'] = produto.unidade_medida
         item_dict['ncm'] = produto.ncm
+        item_dict['preco_custo'] = float(produto.preco_custo) if produto.preco_custo else 0
         itens_formatados.append(item_dict)
     
     return {
@@ -153,7 +187,10 @@ def concluir_venda(
     current_user: dict = Depends(get_current_user)
 ):
     """Conclui uma venda alterando seu status"""
-    venda = db.query(Venda).filter(Venda.id == venda_id).first()
+    venda = db.query(Venda).filter(
+        Venda.id == venda_id,
+        Venda.deleted_at.is_(None)
+    ).first()
     
     if not venda:
         raise HTTPException(
@@ -176,7 +213,10 @@ def cancelar_venda(
     current_user: dict = Depends(get_current_user)
 ):
     """Cancela uma venda e reverte o estoque"""
-    venda = db.query(Venda).filter(Venda.id == venda_id).first()
+    venda = db.query(Venda).filter(
+        Venda.id == venda_id,
+        Venda.deleted_at.is_(None)
+    ).first()
     
     if not venda:
         raise HTTPException(
@@ -184,8 +224,11 @@ def cancelar_venda(
             detail="Venda não encontrada"
         )
     
-    # Reverter estoque
-    itens = db.query(ItemVenda).filter(ItemVenda.venda_id == venda_id).all()
+    # Reverter estoque (apenas itens não excluídos)
+    itens = db.query(ItemVenda).filter(
+        ItemVenda.venda_id == venda_id,
+        ItemVenda.deleted_at.is_(None)
+    ).all()
     
     for item in itens:
         produto = db.query(Produto).filter(Produto.id == item.produto_id).first()
@@ -198,3 +241,40 @@ def cancelar_venda(
     db.commit()
     
     return {"message": "Venda cancelada e estoque revertido", "venda_id": venda.id}
+
+
+@router.delete("/{venda_id}")
+def excluir_venda(
+    venda_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Exclusão lógica de venda - marca como excluída sem remover do banco"""
+    venda = db.query(Venda).filter(
+        Venda.id == venda_id,
+        Venda.deleted_at.is_(None)
+    ).first()
+    
+    if not venda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venda não encontrada"
+        )
+    
+    # Marcar venda como excluída
+    venda.deleted_at = datetime.now()
+    db.add(venda)
+    
+    # Marcar todos os itens da venda como excluídos
+    itens = db.query(ItemVenda).filter(
+        ItemVenda.venda_id == venda_id,
+        ItemVenda.deleted_at.is_(None)
+    ).all()
+    
+    for item in itens:
+        item.deleted_at = datetime.now()
+        db.add(item)
+    
+    db.commit()
+    
+    return {"message": "Venda excluída com sucesso (exclusão lógica)", "venda_id": venda.id}

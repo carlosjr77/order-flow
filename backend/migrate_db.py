@@ -50,6 +50,69 @@ def run_migration():
             else:
                 print("Coluna 'valor_frete' já existe.")
             
+            # Verificar coluna margem_lucro em produtos
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'produtos' AND column_name = 'margem_lucro'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                print("Adicionando coluna 'margem_lucro' na tabela 'produtos'...")
+                conn.execute(text(
+                    "ALTER TABLE produtos ADD COLUMN margem_lucro FLOAT"
+                ))
+                print("Coluna 'margem_lucro' adicionada com sucesso!")
+            else:
+                print("Coluna 'margem_lucro' já existe.")
+            
+            # Verificar coluna margem_lucro_padrao em empresas
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'empresas' AND column_name = 'margem_lucro_padrao'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                print("Adicionando coluna 'margem_lucro_padrao' na tabela 'empresas'...")
+                conn.execute(text(
+                    "ALTER TABLE empresas ADD COLUMN margem_lucro_padrao FLOAT DEFAULT 1.0"
+                ))
+                print("Coluna 'margem_lucro_padrao' adicionada com sucesso!")
+            else:
+                print("Coluna 'margem_lucro_padrao' já existe.")
+            
+            # Atualizar restrição de chave estrangeira em itens_venda para CASCADE
+            print("Verificando restrição de chave estrangeira em itens_venda...")
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.table_constraints "
+                "WHERE constraint_name = 'itens_venda_produto_id_fkey' AND table_name = 'itens_venda'"
+            )).fetchone()
+            
+            if result[0] > 0:
+                # Verificar se já tem ON DELETE CASCADE
+                result_cascade = conn.execute(text(
+                    "SELECT delete_rule FROM information_schema.referential_constraints "
+                    "WHERE constraint_name = 'itens_venda_produto_id_fkey'"
+                )).fetchone()
+                
+                if result_cascade and result_cascade[0] != 'CASCADE':
+                    print("Atualizando restrição de chave estrangeira em itens_venda para CASCADE...")
+                    # Drop da restrição antiga
+                    conn.execute(text(
+                        "ALTER TABLE itens_venda DROP CONSTRAINT itens_venda_produto_id_fkey"
+                    ))
+                    # Criação da nova restrição com CASCADE
+                    conn.execute(text(
+                        "ALTER TABLE itens_venda ADD CONSTRAINT itens_venda_produto_id_fkey "
+                        "FOREIGN KEY (produto_id) REFERENCES produtos(id) ON DELETE CASCADE"
+                    ))
+                    print("Restrição atualizada para CASCADE com sucesso!")
+                elif result_cascade and result_cascade[0] == 'CASCADE':
+                    print("Restrição de chave estrangeira já está com CASCADE.")
+                else:
+                    print("Restrição de chave estrangeira não encontrada em referential_constraints.")
+            else:
+                print("Restrição de chave estrangeira 'itens_venda_produto_id_fkey' não encontrada.")
+            
             conn.commit()
             print("\n✅ Migração concluída com sucesso!")
             

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -19,6 +19,7 @@ class Empresa(Base):
     cep = Column(String(10), nullable=False)
     telefone = Column(String(20), nullable=True)
     email = Column(String(255), nullable=True)
+    margem_lucro_padrao = Column(Float, nullable=True, default=1.0)  # Margem padrão (1.0 = 100%)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     
