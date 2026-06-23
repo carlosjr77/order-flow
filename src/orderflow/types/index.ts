@@ -62,6 +62,7 @@ export interface Venda {
   status: 'pendente' | 'concluído' | 'cancelado';
   forma_pagamento?: string;
   observacoes?: string;
+  nome_cliente?: string;
   itens?: ItemVenda[];
   created_at: string;
   updated_at: string;

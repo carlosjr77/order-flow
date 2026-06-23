@@ -98,6 +98,7 @@ class VendaBase(BaseModel):
     valor_frete: Optional[float] = 0
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
+    nome_cliente: Optional[str] = None
 
 
 class VendaCreate(BaseModel):
@@ -105,6 +106,7 @@ class VendaCreate(BaseModel):
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
+    nome_cliente: Optional[str] = None
 
 
 class VendaResponse(VendaBase):

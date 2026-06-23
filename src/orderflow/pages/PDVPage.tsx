@@ -349,12 +349,14 @@ export const PDVPage: React.FC = () => {
       }
 
       const valorFreteNum = extrairValorMoeda(precoFreteFormatado) || 0;
+      const nomeCliente = clienteSelecionado?.nome || (showDadosCliente && dadosCliente.nome ? dadosCliente.nome : null);
 
       const venda: Venda = await apiClient.criarVenda({
         itens,
         forma_pagamento: formaPagamento,
         observacoes: observacoes || null,
         valor_frete: valorFreteNum,
+        nome_cliente: nomeCliente,
       });
 
       const vendaDetalhes: Venda = await apiClient.obterVenda(venda.id);

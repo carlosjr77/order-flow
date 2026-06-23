@@ -473,26 +473,29 @@ export const VendasPage: React.FC = () => {
                         )}
                       </button>
                       
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="font-bold text-lg text-gray-900">Pedido #{venda.id}</h3>
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(venda.status)}`}>
-                            {venda.status}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">
-                          Data: {new Date(venda.data_venda).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: '2-digit',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </p>
-                        {venda.forma_pagamento && (
-                          <p className="text-sm text-gray-600">Pagamento: {venda.forma_pagamento}</p>
-                        )}
-                      </div>
+                       <div className="flex-1">
+                         <div className="flex items-center gap-3 mb-2">
+                           <h3 className="font-bold text-lg text-gray-900">Pedido #{venda.id}</h3>
+                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(venda.status)}`}>
+                             {venda.status}
+                           </span>
+                         </div>
+                         <p className="text-sm text-gray-600">
+                           Data: {new Date(venda.data_venda).toLocaleDateString('pt-BR', {
+                             day: '2-digit',
+                             month: '2-digit',
+                             year: 'numeric',
+                             hour: '2-digit',
+                             minute: '2-digit',
+                           })}
+                         </p>
+                         {venda.nome_cliente && (
+                           <p className="text-sm text-gray-600">Cliente: {venda.nome_cliente}</p>
+                         )}
+                         {venda.forma_pagamento && (
+                           <p className="text-sm text-gray-600">Pagamento: {venda.forma_pagamento}</p>
+                         )}
+                       </div>
                     </div>
 
                     <div className="text-right">

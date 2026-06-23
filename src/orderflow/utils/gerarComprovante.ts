@@ -180,8 +180,8 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   drawSectionTitle("DESTINATÁRIO/REMETENTE", y + 2.5);
   y += 3.5; // Espaço do texto do título até a caixa
   
-  // Usar dados do cliente se preenchido, senão consumidor final
-  const nomeCliente = dados.cliente?.nome || "CONSUMIDOR FINAL";
+  // Usar dados do cliente se preenchido, ou do venda.nome_cliente, senão consumidor final
+  const nomeCliente = dados.cliente?.nome || dados.venda.nome_cliente || "CONSUMIDOR FINAL";
   const documentoCliente = dados.cliente?.documento || "000.000.000-00";
   
   drawDanfeBox(m, y, w * 0.65, 7, "NOME/RAZÃO SOCIAL", nomeCliente);

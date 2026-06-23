@@ -130,7 +130,8 @@ def criar_venda(
         status="pendente",
         forma_pagamento=venda_data.forma_pagamento,
         observacoes=venda_data.observacoes,
-        valor_frete=valor_frete
+        valor_frete=valor_frete,
+        nome_cliente=venda_data.nome_cliente
     )
     
     db.add(nova_venda)

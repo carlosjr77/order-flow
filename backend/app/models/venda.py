@@ -14,6 +14,7 @@ class Venda(Base):
     status = Column(String(20), nullable=False, default="pendente")  # pendente, concluído, cancelado
     forma_pagamento = Column(String(50), nullable=True)  # Dinheiro, Crédito, Débito, PIX
     observacoes = Column(String(255), nullable=True)
+    nome_cliente = Column(String(255), nullable=True)  # Nome do cliente da venda
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)  # Exclusão lógica
