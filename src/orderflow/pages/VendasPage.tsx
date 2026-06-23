@@ -78,13 +78,18 @@ export const VendasPage: React.FC = () => {
         empresa: empresaDados || dadosEmpresaPadrao,
         venda: vendaDetalhes,
         itens: documentoItens,
-        // Não há dados de cliente/entrega no histórico, usa null
-        cliente: null,
+        // Usar nome do cliente da venda se disponível
+        cliente: vendaDetalhes.nome_cliente ? { nome: vendaDetalhes.nome_cliente, documento: '' } : null,
         entrega: null,
       };
 
       const pdf = await gerarComprovanteDANFE(dadosComprovante);
-      pdf.save(`Pedido_${vendaDetalhes.id}_${new Date().getTime()}.pdf`);
+      // Incluir nome do cliente no nome do arquivo se disponível
+      const nomeCliente = vendaDetalhes.nome_cliente;
+      const nomeArquivo = nomeCliente 
+        ? `Pedido_${vendaDetalhes.id}_${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
+        : `Pedido_${vendaDetalhes.id}_${new Date().getTime()}.pdf`;
+      pdf.save(nomeArquivo);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
     }
