@@ -310,8 +310,8 @@ export const PDVPage: React.FC = () => {
       // Incluir nome do cliente no nome do arquivo se disponível
       const nomeCliente = clienteSelecionado?.nome || (showDadosCliente && dadosCliente.nome ? dadosCliente.nome : null);
       const nomeArquivo = nomeCliente 
-        ? `Pedido_${vendaFinalizada.id}_${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
-        : `Pedido_${vendaFinalizada.id}_${new Date().getTime()}.pdf`;
+        ? `${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
+        : `${new Date().getTime()}.pdf`;
       pdf.save(nomeArquivo);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
@@ -392,8 +392,8 @@ export const PDVPage: React.FC = () => {
       const pdf = await gerarComprovanteDANFE(dadosComprovante);
       // Incluir nome do cliente no nome do arquivo se disponível
       const nomeArquivo = nomeCliente 
-        ? `Pedido_${venda.id}_${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
-        : `Pedido_${venda.id}_${new Date().getTime()}.pdf`;
+        ? `${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
+        : `${new Date().getTime()}.pdf`;
       pdf.save(nomeArquivo);
 
       setVendaFinalizada(vendaDetalhes);

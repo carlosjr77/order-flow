@@ -87,8 +87,8 @@ export const VendasPage: React.FC = () => {
       // Incluir nome do cliente no nome do arquivo se disponível
       const nomeCliente = vendaDetalhes.nome_cliente;
       const nomeArquivo = nomeCliente 
-        ? `Pedido_${vendaDetalhes.id}_${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
-        : `Pedido_${vendaDetalhes.id}_${new Date().getTime()}.pdf`;
+        ? `${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
+        : `${new Date().getTime()}.pdf`;
       pdf.save(nomeArquivo);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
