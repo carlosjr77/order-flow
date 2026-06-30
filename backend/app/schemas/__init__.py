@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 class UsuarioBase(BaseModel):
@@ -99,6 +99,7 @@ class VendaBase(BaseModel):
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
     nome_cliente: Optional[str] = None
+    data_entrega: Optional[date] = None  # Data de entrega
 
 
 class VendaCreate(BaseModel):
@@ -107,6 +108,7 @@ class VendaCreate(BaseModel):
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
+    data_entrega: Optional[date] = None  # Data de entrega
 
 
 class VendaResponse(VendaBase):
@@ -118,6 +120,15 @@ class VendaResponse(VendaBase):
     
     class Config:
         from_attributes = True
+    
+    @field_validator('data_entrega', mode='plain')
+    @classmethod
+    def convert_data_entrega(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, date):
+            return v.isoformat()
+        return v
 
 
 class VendaDetailResponse(VendaResponse):

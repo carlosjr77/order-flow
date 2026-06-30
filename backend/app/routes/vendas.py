@@ -131,7 +131,8 @@ def criar_venda(
         forma_pagamento=venda_data.forma_pagamento,
         observacoes=venda_data.observacoes,
         valor_frete=valor_frete,
-        nome_cliente=venda_data.nome_cliente
+        nome_cliente=venda_data.nome_cliente,
+        data_entrega=venda_data.data_entrega if venda_data.data_entrega else None
     )
     
     db.add(nova_venda)

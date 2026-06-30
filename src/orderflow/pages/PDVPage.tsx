@@ -54,6 +54,7 @@ export const PDVPage: React.FC = () => {
 
   const [precoFreteFormatado, setPrecoFreteFormatado] = useState('0,00');
   const [freteFocus, setFreteFocus] = useState(false);
+  const [dataEntrega, setDataEntrega] = useState('');
 
   const dadosEmpresaPadrao: DadosEmpresa = {
     nome: 'Sua Empresa LTDA',
@@ -362,6 +363,7 @@ export const PDVPage: React.FC = () => {
         observacoes: observacoes || null,
         valor_frete: valorFreteNum,
         nome_cliente: nomeCliente,
+        data_entrega: dataEntrega ? dataEntrega : null,
       });
 
       const vendaDetalhes: Venda = await apiClient.obterVenda(venda.id);
@@ -404,6 +406,7 @@ export const PDVPage: React.FC = () => {
       setFormaPagamento('');
       setObservacoes('');
       setPrecoFreteFormatado('0,00');
+      setDataEntrega('');
       setClienteSelecionado(null);
       setBuscaCliente('');
       setDadosCliente({ nome: '', documento: '' });
@@ -842,6 +845,23 @@ export const PDVPage: React.FC = () => {
                         )}
                       </div>
                     )}
+
+                    {/* Data de Entrega */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Data de Entrega (opcional)
+                      </label>
+                      <Input
+                        type="date"
+                        value={dataEntrega}
+                        onChange={(e) => setDataEntrega(e.target.value)}
+                        className="w-full"
+                        placeholder="Selecione a data de entrega"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Deixe vazio para entrega imediata (data de hoje)
+                      </p>
+                    </div>
 
                     {/* Frete */}
                     <div className="mb-4">

@@ -149,6 +149,21 @@ def run_migrations():
                 print("✅ Migração: coluna 'nome_cliente' adicionada em 'vendas'")
             else:
                 print("✅ Migração: coluna 'nome_cliente' já existe em 'vendas'")
+            
+            # Adicionar coluna data_entrega em vendas se não existir
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'vendas' AND column_name = 'data_entrega'"
+            )).fetchone()
+            
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE vendas ADD COLUMN data_entrega DATE"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'data_entrega' adicionada em 'vendas'")
+            else:
+                print("✅ Migração: coluna 'data_entrega' já existe em 'vendas'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 

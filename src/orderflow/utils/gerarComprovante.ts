@@ -57,6 +57,11 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   const dataVenda = new Date(dados.venda.data_venda);
   const dataFormatada = dataVenda.toLocaleDateString("pt-BR");
   const horaFormatada = dataVenda.toLocaleTimeString("pt-BR").slice(0, 5);
+  
+  // Data de entrega (se disponível, senão usa data da venda)
+  const dataEntregaFormatada = dados.venda.data_entrega 
+    ? new Date(dados.venda.data_entrega + 'T12:00:00').toLocaleDateString("pt-BR")
+    : dataFormatada;
 
   // ==========================================
   // FUNÇÕES UTILITÁRIAS DE DESENHO
@@ -184,9 +189,10 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   const nomeCliente = dados.cliente?.nome || dados.venda.nome_cliente || "CONSUMIDOR FINAL";
   const documentoCliente = dados.cliente?.documento || "000.000.000-00";
   
-  drawDanfeBox(m, y, w * 0.65, 7, "NOME/RAZÃO SOCIAL", nomeCliente);
-  drawDanfeBox(m + w * 0.65, y, w * 0.20, 7, "CNPJ/CPF", documentoCliente);
-  drawDanfeBox(m + w * 0.85, y, w * 0.15, 7, "DATA DA EMISSÃO", dataFormatada, 'right');
+  drawDanfeBox(m, y, w * 0.50, 7, "NOME/RAZÃO SOCIAL", nomeCliente);
+  drawDanfeBox(m + w * 0.50, y, w * 0.20, 7, "CNPJ/CPF", documentoCliente);
+  drawDanfeBox(m + w * 0.70, y, w * 0.15, 7, "DATA DA EMISSÃO", dataFormatada, 'right');
+  drawDanfeBox(m + w * 0.85, y, w * 0.15, 7, "DATA DE ENTREGA", dataEntregaFormatada, 'right');
   y += 7;
   
   // Usar endereço de entrega se preenchido, senão traços

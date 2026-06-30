@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout } = useAuth();
@@ -158,6 +158,13 @@ export const DashboardPage: React.FC = () => {
             icon={<Settings className="w-8 h-8" />}
             onClick={() => navigate('/empresa')}
             color="bg-indigo-50 hover:bg-indigo-100"
+          />
+          <QuickAccessCard
+            title="Relatório de Perdas"
+            description="Controlar perdas e prejuízos"
+            icon={<AlertTriangle className="w-8 h-8" />}
+            onClick={() => navigate('/perdas')}
+            color="bg-red-50 hover:bg-red-100"
           />
         </div>
       </main>

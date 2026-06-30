@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, DateTime
+from sqlalchemy import Column, Integer, Numeric, String, DateTime, Date
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -9,6 +9,7 @@ class Venda(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     data_venda = Column(DateTime, server_default=func.now(), index=True, default=func.now())
+    data_entrega = Column(Date, nullable=True)  # Data de entrega (pode ser passado ou futuro)
     valor_total = Column(Numeric(10, 2), nullable=False, default=0)
     valor_frete = Column(Numeric(10, 2), nullable=True, default=0)  # Valor do frete
     status = Column(String(20), nullable=False, default="pendente")  # pendente, concluído, cancelado

@@ -57,6 +57,7 @@ export interface ItemVenda {
 export interface Venda {
   id: number;
   data_venda: string;
+  data_entrega?: string; // Data de entrega (pode ser passado ou futuro)
   valor_total: number;
   valor_frete?: number;
   status: 'pendente' | 'concluído' | 'cancelado';
