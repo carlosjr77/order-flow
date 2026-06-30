@@ -20,23 +20,46 @@ export const PerdasPage: React.FC = () => {
   const [busca, setBusca] = useState('');
   const [itensPerda, setItensPerda] = useState<ItemPerda[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [todosProdutos, setTodosProdutos] = useState<Produto[]>([]);
+  const [quantidadeEditando, setQuantidadeEditando] = useState<{ [key: number]: string }>({});
 
   useEffect(() => {
     carregarProdutos();
   }, []);
 
+  // Filtrar produtos quando a busca mudar
+  useEffect(() => {
+    if (todosProdutos.length > 0) {
+      filtrarProdutos();
+    }
+  }, [busca, todosProdutos]);
+
   const carregarProdutos = async () => {
     try {
       setIsLoading(true);
-      const data = await apiClient.listarProdutos(0, 1000, busca || undefined);
+      const data = await apiClient.listarProdutos(0, 1000);
       const produtosOrdenados = [...data].sort((a, b) =>
         a.descricao.localeCompare(b.descricao, 'pt-BR')
       );
+      setTodosProdutos(produtosOrdenados);
       setProdutos(produtosOrdenados);
     } catch (error) {
       console.error('Erro ao carregar produtos:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const filtrarProdutos = () => {
+    if (!busca || busca.trim() === '') {
+      setProdutos(todosProdutos);
+    } else {
+      const buscaLower = busca.toLowerCase();
+      const filtrados = todosProdutos.filter(produto =>
+        produto.descricao.toLowerCase().includes(buscaLower) ||
+        produto.codigo_interno.toLowerCase().includes(buscaLower)
+      );
+      setProdutos(filtrados);
     }
   };
 
@@ -69,6 +92,13 @@ export const PerdasPage: React.FC = () => {
       return;
     }
     
+    // Limpar o estado de edição
+    setQuantidadeEditando(prev => {
+      const novo = { ...prev };
+      delete novo[produtoId];
+      return novo;
+    });
+    
     setItensPerda(
       itensPerda.map((item) =>
         item.produto.id === produtoId
@@ -76,6 +106,37 @@ export const PerdasPage: React.FC = () => {
           : item
       )
     );
+  };
+
+  const iniciarEdicaoQuantidade = (produtoId: number, quantidadeAtual: number) => {
+    setQuantidadeEditando(prev => ({
+      ...prev,
+      [produtoId]: String(quantidadeAtual)
+    }));
+  };
+
+  const handleBlurQuantidade = (produtoId: number) => {
+    const valor = quantidadeEditando[produtoId];
+    if (valor === '' || valor === undefined) {
+      // Se estiver vazio, mantém a quantidade atual
+      setQuantidadeEditando(prev => {
+        const novo = { ...prev };
+        delete novo[produtoId];
+        return novo;
+      });
+    } else {
+      const num = parseFloat(valor);
+      if (!isNaN(num) && num > 0) {
+        atualizarQuantidade(produtoId, num);
+      } else {
+        // Valor inválido, remove do estado de edição
+        setQuantidadeEditando(prev => {
+          const novo = { ...prev };
+          delete novo[produtoId];
+          return novo;
+        });
+      }
+    }
   };
 
   const calcularTotalPrejuizo = () => {
@@ -383,11 +444,29 @@ export const PerdasPage: React.FC = () => {
                           </div>
                           <div className="flex items-center gap-2">
                             <input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               min="1"
                               step={item.produto.unidade_medida === 'KG' ? '0.001' : '1'}
-                              value={item.quantidade}
-                              onChange={(e) => atualizarQuantidade(item.produto.id, parseFloat(e.target.value) || 0)}
+                              value={quantidadeEditando[item.produto.id] ?? item.quantidade}
+                              onChange={(e) => {
+                                const valor = e.target.value;
+                                // Permite digitar valores vazios ou números
+                                if (valor === '' || /^\d*\.?\d*$/.test(valor)) {
+                                  setQuantidadeEditando(prev => ({
+                                    ...prev,
+                                    [item.produto.id]: valor
+                                  }));
+                                }
+                              }}
+                              onFocus={() => iniciarEdicaoQuantidade(item.produto.id, item.quantidade)}
+                              onBlur={() => handleBlurQuantidade(item.produto.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleBlurQuantidade(item.produto.id);
+                                  (e.target as HTMLInputElement).blur();
+                                }
+                              }}
                               className="w-20 px-2 py-1 border border-red-300 rounded text-sm"
                             />
                             <span className="text-xs text-gray-500">{item.produto.unidade_medida}</span>
