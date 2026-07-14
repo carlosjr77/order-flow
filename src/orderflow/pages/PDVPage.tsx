@@ -12,11 +12,17 @@ import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrai
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 import { calcularPrecoVenda } from '../utils/precoDinamico';
 
+type ItemCarrinhoPDV = ItemCarrinho & {
+  id: number;
+  enviar_bar?: boolean;
+  enviar_cozinha?: boolean;
+};
+
 export const PDVPage: React.FC = () => {
   const navigate = useNavigate();
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [carrinho, setCarrinho] = useState<(ItemCarrinho & { id: number })[]>([]);
+  const [carrinho, setCarrinho] = useState<ItemCarrinhoPDV[]>([]);
   const [busca, setBusca] = useState('');
   const buscaDebounced = useDebounce(busca, 300);
   const [isLoading, setIsLoading] = useState(false);
@@ -196,6 +202,20 @@ export const PDVPage: React.FC = () => {
     setCarrinho(carrinho.filter((item) => item.id !== id));
   };
 
+  const alternarDestinoItem = (id: number, destino: 'bar' | 'cozinha') => {
+    setCarrinho(
+      carrinho.map((item) => {
+        if (item.id !== id) return item;
+
+        if (destino === 'bar') {
+          return { ...item, enviar_bar: !item.enviar_bar };
+        }
+
+        return { ...item, enviar_cozinha: !item.enviar_cozinha };
+      })
+    );
+  };
+
   const atualizarQuantidade = (id: number, novaQuantidade: number | string) => {
     // Se está vazio (usuário apagando para digitar novo valor)
     if (novaQuantidade === '' || novaQuantidade === null || novaQuantidade === undefined) {
@@ -349,6 +369,18 @@ export const PDVPage: React.FC = () => {
           valor_unitario: item.valor_unitario,
         }));
 
+      const destinosPorProduto = new Map(
+        carrinho
+          .filter((item) => item.quantidade > 0)
+          .map((item) => [
+            item.produto_id,
+            {
+              enviar_bar: !!item.enviar_bar,
+              enviar_cozinha: !!item.enviar_cozinha,
+            },
+          ])
+      );
+
       if (itens.length === 0) {
         alert('Adicione produtos com quantidade maior que zero!');
         return;
@@ -374,6 +406,8 @@ export const PDVPage: React.FC = () => {
         codigo_interno: item.codigo_interno || String(item.produto_id),
         unidade_medida: item.unidade_medida || 'UN',
         ncm: item.ncm || undefined,
+        enviar_bar: destinosPorProduto.get(item.produto_id)?.enviar_bar || false,
+        enviar_cozinha: destinosPorProduto.get(item.produto_id)?.enviar_cozinha || false,
       })) || [];
 
       // Usar clienteSelecionado se disponível, caso contrário dadosCliente
@@ -398,7 +432,10 @@ export const PDVPage: React.FC = () => {
         : `${new Date().getTime()}.pdf`;
       pdf.save(nomeArquivo);
 
-      setVendaFinalizada(vendaDetalhes);
+      setVendaFinalizada({
+        ...vendaDetalhes,
+        itens: documentoItens,
+      });
       setShowModalSucesso(true);
 
       // Resetar todos os campos
@@ -592,6 +629,42 @@ export const PDVPage: React.FC = () => {
                           <p className="text-sm font-semibold text-gray-900">
                             R$ {item.valor_total.toFixed(2)}
                           </p>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <div className="w-full rounded-md border border-slate-200 bg-slate-50 p-2">
+                            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                              Destino para conferencia
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant={item.enviar_cozinha ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => alternarDestinoItem(item.id, 'cozinha')}
+                                className={`h-7 px-2 text-xs ${item.enviar_cozinha ? 'bg-orange-600 hover:bg-orange-700 text-white border-orange-600' : 'border-orange-300 text-orange-700 hover:bg-orange-50'}`}
+                              >
+                                Cozinha
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={item.enviar_bar ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => alternarDestinoItem(item.id, 'bar')}
+                                className={`h-7 px-2 text-xs ${item.enviar_bar ? 'bg-sky-600 hover:bg-sky-700 text-white border-sky-600' : 'border-sky-300 text-sky-700 hover:bg-sky-50'}`}
+                              >
+                                Bar
+                              </Button>
+                              <span className="ml-auto rounded-full bg-white px-2 py-1 text-[11px] font-medium text-slate-700 border border-slate-200">
+                                {item.enviar_cozinha && item.enviar_bar
+                                  ? 'Vai para Cozinha e Bar'
+                                  : item.enviar_cozinha
+                                  ? 'Vai para Cozinha'
+                                  : item.enviar_bar
+                                  ? 'Vai para Bar'
+                                  : 'Sem categoria'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

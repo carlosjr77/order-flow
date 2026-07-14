@@ -25,7 +25,15 @@ export interface DadosComprovante {
   };
   venda: Venda;
   // Permitindo index signature flexível caso os dados venham do backend com formatos variados
-  itens: (ItemVenda & { descricao?: string; ncm?: string; codigo_interno?: string; unidade_medida?: string; produto?: any })[];
+  itens: (ItemVenda & {
+    descricao?: string;
+    ncm?: string;
+    codigo_interno?: string;
+    unidade_medida?: string;
+    produto?: any;
+    enviar_bar?: boolean;
+    enviar_cozinha?: boolean;
+  })[];
   // Dados opcionais do cliente
   cliente?: {
     nome: string;
@@ -47,6 +55,49 @@ export interface DadosComprovante {
 const fmtMoney = (valor: number | string) =>
   Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const TIMEZONE_BR = 'America/Sao_Paulo';
+
+const formatarDataHoraBrasil = (valor: string | Date) => {
+  const data = valor instanceof Date ? valor : new Date(valor);
+
+  if (Number.isNaN(data.getTime())) {
+    return { data: '-', hora: '-' };
+  }
+
+  const dataFormatada = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TIMEZONE_BR,
+  }).format(data);
+
+  const horaFormatada = new Intl.DateTimeFormat('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: TIMEZONE_BR,
+  }).format(data);
+
+  return { data: dataFormatada, hora: horaFormatada };
+};
+
+const formatarDataSomenteBrasil = (valor: string) => {
+  if (!valor) return '-';
+
+  // Se veio no formato YYYY-MM-DD (sem hora), evita qualquer conversão de fuso.
+  const ehSomenteData = /^\d{4}-\d{2}-\d{2}$/.test(valor);
+  if (ehSomenteData) {
+    const [ano, mes, dia] = valor.split('-');
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) {
+    return valor;
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TIMEZONE_BR,
+  }).format(data);
+};
+
 export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<jsPDF> => {
   const doc = new jsPDF('p', 'mm', 'a4');
   const m = 5; // Margem padrão (5mm)
@@ -54,13 +105,13 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   let y = m;
 
   const numPedido = String(dados.venda.id).padStart(9, "0");
-  const dataVenda = new Date(dados.venda.data_venda);
-  const dataFormatada = dataVenda.toLocaleDateString("pt-BR");
-  const horaFormatada = dataVenda.toLocaleTimeString("pt-BR").slice(0, 5);
+  const dataHoraVenda = formatarDataHoraBrasil(dados.venda.data_venda);
+  const dataFormatada = dataHoraVenda.data;
+  const horaFormatada = dataHoraVenda.hora;
   
   // Data de entrega (se disponível, senão usa data da venda)
   const dataEntregaFormatada = dados.venda.data_entrega 
-    ? new Date(dados.venda.data_entrega + 'T12:00:00').toLocaleDateString("pt-BR")
+    ? formatarDataSomenteBrasil(dados.venda.data_entrega)
     : dataFormatada;
 
   // ==========================================
@@ -257,57 +308,116 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   drawSectionTitle("DADOS DO PRODUTO/SERVIÇO", y + 2.5);
   y += 3.5;
 
-  // MAPEAMENTO INTELIGENTE (Fallback para dados faltantes)
-  const tableData = dados.itens.map((it) => {
-    // Tenta pegar o código interno, se não existir, pega o ID do produto, se não, traço.
-    const codigo = it.codigo_interno || (it.produto_id ? String(it.produto_id) : "-");
-    
-    // Tenta pegar a descrição nativa do ItemVenda, ou procura dentro do objeto 'produto' aninhado
-    const descricao = it.descricao || it.produto?.descricao || "Produto sem descrição";
+  const montarLinhasTabela = (itens: DadosComprovante['itens']) => {
+    return itens.map((it) => {
+      const codigo = it.codigo_interno || (it.produto_id ? String(it.produto_id) : '-');
+      const descricao = it.descricao || it.produto?.descricao || 'Produto sem descrição';
 
-    return [
-      codigo,
-      descricao,
-      it.ncm || "-",
-      it.unidade_medida || "UN",
-      Number(it.quantidade).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
-      fmtMoney(it.valor_unitario),
-      fmtMoney(it.valor_total),
-    ];
-  });
+      return [
+        codigo,
+        descricao,
+        it.ncm || '-',
+        it.unidade_medida || 'UN',
+        Number(it.quantidade).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+        fmtMoney(it.valor_unitario),
+        fmtMoney(it.valor_total),
+      ];
+    });
+  };
 
-  autoTable(doc, {
-    startY: y,
-    head: [['CÓD. PROD.', 'DESCRIÇÃO DO PRODUTO/SERVIÇO', 'NCM/SH', 'UNID', 'QTD', 'VLR. UNIT.', 'VLR. TOTAL']],
-    body: tableData,
-    theme: 'grid',
-    styles: {
-      fontSize: 7.5,
-      font: 'helvetica',
-      lineWidth: 0.2,
-      lineColor: [0, 0, 0],
-      textColor: [0, 0, 0],
-      cellPadding: 1,
-    },
-    headStyles: {
-      fillColor: [245, 245, 245],
-      textColor: [0, 0, 0],
-      fontStyle: 'bold',
-    },
-    columnStyles: {
-      0: { cellWidth: w * 0.12 },
-      1: { cellWidth: 'auto' },
-      2: { cellWidth: w * 0.10, halign: 'center' },
-      3: { cellWidth: w * 0.06, halign: 'center' },
-      4: { cellWidth: w * 0.08, halign: 'right' },
-      5: { cellWidth: w * 0.12, halign: 'right' },
-      6: { cellWidth: w * 0.14, halign: 'right', fontStyle: 'bold' },
-    },
-    margin: { left: m, right: m },
-  });
+  const renderizarTabelaItens = (tituloSecao: string, itensSecao: DadosComprovante['itens']) => {
+    if (itensSecao.length === 0) return;
 
-  // @ts-ignore - plugin adiciona lastAutoTable no doc
-  y = doc.lastAutoTable.finalY + 4;
+    if (y + 8 > 297 - m) {
+      doc.addPage();
+      y = m;
+    }
+
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.text(tituloSecao, m, y + 2.5);
+    y += 4;
+
+    autoTable(doc, {
+      startY: y,
+      head: [['CÓD. PROD.', 'DESCRIÇÃO DO PRODUTO/SERVIÇO', 'NCM/SH', 'UNID', 'QTD', 'VLR. UNIT.', 'VLR. TOTAL']],
+      body: montarLinhasTabela(itensSecao),
+      theme: 'grid',
+      styles: {
+        fontSize: 7.5,
+        font: 'helvetica',
+        lineWidth: 0.2,
+        lineColor: [0, 0, 0],
+        textColor: [0, 0, 0],
+        cellPadding: 1,
+      },
+      headStyles: {
+        fillColor: [245, 245, 245],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: w * 0.12 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: w * 0.10, halign: 'center' },
+        3: { cellWidth: w * 0.06, halign: 'center' },
+        4: { cellWidth: w * 0.08, halign: 'right' },
+        5: { cellWidth: w * 0.12, halign: 'right' },
+        6: { cellWidth: w * 0.14, halign: 'right', fontStyle: 'bold' },
+      },
+      margin: { left: m, right: m },
+    });
+
+    // @ts-ignore - plugin adiciona lastAutoTable no doc
+    y = doc.lastAutoTable.finalY + 3;
+  };
+
+  const possuiCategorizacao = dados.itens.some((it) => it.enviar_bar || it.enviar_cozinha);
+
+  if (!possuiCategorizacao) {
+    autoTable(doc, {
+      startY: y,
+      head: [['CÓD. PROD.', 'DESCRIÇÃO DO PRODUTO/SERVIÇO', 'NCM/SH', 'UNID', 'QTD', 'VLR. UNIT.', 'VLR. TOTAL']],
+      body: montarLinhasTabela(dados.itens),
+      theme: 'grid',
+      styles: {
+        fontSize: 7.5,
+        font: 'helvetica',
+        lineWidth: 0.2,
+        lineColor: [0, 0, 0],
+        textColor: [0, 0, 0],
+        cellPadding: 1,
+      },
+      headStyles: {
+        fillColor: [245, 245, 245],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+      },
+      columnStyles: {
+        0: { cellWidth: w * 0.12 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: w * 0.10, halign: 'center' },
+        3: { cellWidth: w * 0.06, halign: 'center' },
+        4: { cellWidth: w * 0.08, halign: 'right' },
+        5: { cellWidth: w * 0.12, halign: 'right' },
+        6: { cellWidth: w * 0.14, halign: 'right', fontStyle: 'bold' },
+      },
+      margin: { left: m, right: m },
+    });
+
+    // @ts-ignore - plugin adiciona lastAutoTable no doc
+    y = doc.lastAutoTable.finalY + 4;
+  } else {
+    const itensCozinha = dados.itens.filter((it) => it.enviar_cozinha);
+    const itensBar = dados.itens.filter((it) => it.enviar_bar);
+    const itensSemCategoria = dados.itens.filter((it) => !it.enviar_bar && !it.enviar_cozinha);
+
+    renderizarTabelaItens('SEÇÃO COZINHA', itensCozinha);
+    renderizarTabelaItens('SEÇÃO BAR', itensBar);
+    renderizarTabelaItens('SEÇÃO ITENS SEM CATEGORIA', itensSemCategoria);
+
+    y += 1;
+  }
 
   // ==================== DADOS ADICIONAIS ====================
   // Checa se precisa quebrar página para os dados adicionais (precisamos de uns 30mm)
