@@ -590,15 +590,15 @@ export const PDVPage: React.FC = () => {
             </div>
           </div>
 
-          <div>
-            <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-hidden">
-              <div className="p-6 lg:h-full lg:overflow-y-auto">
+          <div className="lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)] lg:min-h-0">
+            <Card className="h-full min-h-0 overflow-hidden">
+              <div className="h-full min-h-0 overflow-y-auto p-6">
                 <h2 className="text-lg font-bold mb-4">Carrinho</h2>
 
                 {carrinho.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">Carrinho vazio</p>
                 ) : (
-                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                  <div className="space-y-4">
                     {carrinho.map((item) => (
                       <div key={item.id} className="border-b pb-3 last:border-b-0">
                         <div className="flex justify-between items-start mb-2">
@@ -1002,28 +1002,30 @@ export const PDVPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <Button
-                      onClick={finalizarVenda}
-                      disabled={!formaPagamento}
-                      className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-semibold mb-2"
-                    >
-                      <Download className="w-4 h-4 mr-2" />
-                      Finalizar Venda
-                    </Button>
-                    <Button
-                      onClick={() => { 
-                        setCarrinho([]); 
-                        setFormaPagamento(''); 
-                        setPrecoFreteFormatado('0,00');
-                        setClienteSelecionado(null);
-                        setShowListaClientes(false);
-                        setBuscaCliente('');
-                      }}
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Limpar Carrinho
-                    </Button>
+                    <div className="sticky bottom-0 -mx-6 mt-2 border-t bg-white/95 px-6 pb-2 pt-3 backdrop-blur">
+                      <Button
+                        onClick={finalizarVenda}
+                        disabled={!formaPagamento}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-semibold mb-2"
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Finalizar Venda
+                      </Button>
+                      <Button
+                        onClick={() => { 
+                          setCarrinho([]); 
+                          setFormaPagamento(''); 
+                          setPrecoFreteFormatado('0,00');
+                          setClienteSelecionado(null);
+                          setShowListaClientes(false);
+                          setBuscaCliente('');
+                        }}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        Limpar Carrinho
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
