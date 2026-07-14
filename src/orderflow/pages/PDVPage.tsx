@@ -591,8 +591,8 @@ export const PDVPage: React.FC = () => {
           </div>
 
           <div>
-            <Card className="sticky top-4">
-              <div className="p-6">
+            <Card className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-hidden">
+              <div className="p-6 lg:h-full lg:overflow-y-auto">
                 <h2 className="text-lg font-bold mb-4">Carrinho</h2>
 
                 {carrinho.length === 0 ? (
