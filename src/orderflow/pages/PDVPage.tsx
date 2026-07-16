@@ -12,8 +12,15 @@ import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrai
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 import { calcularPrecoVenda } from '../utils/precoDinamico';
 
+type ModoPrecoPersonalizado = 'padrao' | 'preco' | 'margem';
+
 type ItemCarrinhoPDV = ItemCarrinho & {
   id: number;
+  preco_base: number;
+  preco_custo: number;
+  modo_preco_personalizado: ModoPrecoPersonalizado;
+  preco_personalizado?: number | null;
+  margem_personalizada?: number | null;
   enviar_bar?: boolean;
   enviar_cozinha?: boolean;
 };
@@ -108,7 +115,7 @@ export const PDVPage: React.FC = () => {
 
   const loadClientes = async () => {
     try {
-      const data = await apiClient.listarClientes(0, 100, buscaCliente || undefined);
+      const data = await apiClient.listarClientes(0, 100, buscaCliente || undefined) as Cliente[];
       setClientes(data);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
@@ -147,7 +154,7 @@ export const PDVPage: React.FC = () => {
     const carregarProdutos = async () => {
       try {
         setIsLoading(true);
-        const data = await apiClient.listarProdutos(0, 1000, buscaDebounced || undefined);
+        const data = await apiClient.listarProdutos(0, 1000, buscaDebounced || undefined) as Produto[];
         // Ordenar produtos por ordem alfabética (descricao)
         const produtosOrdenados = [...data].sort((a, b) =>
           a.descricao.localeCompare(b.descricao, 'pt-BR')
@@ -191,11 +198,56 @@ export const PDVPage: React.FC = () => {
           unidade_medida: produto.unidade_medida,
           ncm: produto.ncm,
           quantidade: 1,
+          preco_base: precoVenda,
+          preco_custo: produto.preco_custo,
+          modo_preco_personalizado: 'padrao',
+          preco_personalizado: null,
+          margem_personalizada: null,
           valor_unitario: precoVenda,
           valor_total: precoVenda,
         },
       ]);
     }
+  };
+
+  const calcularValorUnitarioItem = (
+    item: ItemCarrinhoPDV,
+    overrides?: Partial<ItemCarrinhoPDV>
+  ) => {
+    const modo = (overrides?.modo_preco_personalizado ?? item.modo_preco_personalizado) as ModoPrecoPersonalizado;
+    const precoPersonalizado = overrides?.preco_personalizado ?? item.preco_personalizado;
+    const margemPersonalizada = overrides?.margem_personalizada ?? item.margem_personalizada;
+
+    if (modo === 'preco' && precoPersonalizado !== null && precoPersonalizado !== undefined && precoPersonalizado > 0) {
+      return Number(precoPersonalizado.toFixed(2));
+    }
+
+    if (modo === 'margem' && margemPersonalizada !== null && margemPersonalizada !== undefined && margemPersonalizada >= 0) {
+      return Number((item.preco_custo * (1 + margemPersonalizada / 100)).toFixed(2));
+    }
+
+    return Number(item.preco_base.toFixed(2));
+  };
+
+  const atualizarPrecoItem = (id: number, changes: Partial<ItemCarrinhoPDV>) => {
+    setCarrinho((itens) =>
+      itens.map((item) => {
+        if (item.id !== id) return item;
+
+        const itemAtualizado = {
+          ...item,
+          ...changes,
+        };
+
+        const valorUnitario = calcularValorUnitarioItem(itemAtualizado, changes);
+
+        return {
+          ...itemAtualizado,
+          valor_unitario: valorUnitario,
+          valor_total: itemAtualizado.quantidade * valorUnitario,
+        };
+      })
+    );
   };
 
   const removerDoCarrinho = (id: number) => {
@@ -389,16 +441,16 @@ export const PDVPage: React.FC = () => {
       const valorFreteNum = extrairValorMoeda(precoFreteFormatado) || 0;
       const nomeCliente = clienteSelecionado?.nome || (showDadosCliente && dadosCliente.nome ? dadosCliente.nome : null);
 
-      const venda: Venda = await apiClient.criarVenda({
+      const venda = await apiClient.criarVenda({
         itens,
         forma_pagamento: formaPagamento,
         observacoes: observacoes || null,
         valor_frete: valorFreteNum,
         nome_cliente: nomeCliente,
         data_entrega: dataEntrega ? dataEntrega : null,
-      });
+      }) as Venda;
 
-      const vendaDetalhes: Venda = await apiClient.obterVenda(venda.id);
+      const vendaDetalhes = await apiClient.obterVenda(venda.id) as Venda;
       
       const documentoItens = vendaDetalhes.itens?.map((item) => ({
         ...item,
@@ -606,7 +658,14 @@ export const PDVPage: React.FC = () => {
                             <p className="text-sm font-semibold text-gray-900 truncate">
                               {item.descricao}
                             </p>
-                            <p className="text-xs text-gray-500">R$ {item.valor_unitario.toFixed(2)}</p>
+                            <p className="text-xs text-gray-500">
+                              R$ {item.valor_unitario.toFixed(2)}
+                              {item.modo_preco_personalizado !== 'padrao' && (
+                                <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                                  personalizado
+                                </span>
+                              )}
+                            </p>
                           </div>
                           <Button
                             variant="outline"
@@ -628,6 +687,101 @@ export const PDVPage: React.FC = () => {
                           <span className="text-xs text-gray-500 min-w-fit">{item.unidade_medida}</span>
                           <p className="text-sm font-semibold text-gray-900">
                             R$ {item.valor_total.toFixed(2)}
+                          </p>
+                        </div>
+                        <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+                            Preco para esta venda
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={item.modo_preco_personalizado === 'padrao' ? 'default' : 'outline'}
+                              onClick={() =>
+                                atualizarPrecoItem(item.id, {
+                                  modo_preco_personalizado: 'padrao',
+                                  preco_personalizado: null,
+                                  margem_personalizada: null,
+                                })
+                              }
+                              className="h-7 px-2 text-xs"
+                            >
+                              Padrao
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={item.modo_preco_personalizado === 'preco' ? 'default' : 'outline'}
+                              onClick={() =>
+                                atualizarPrecoItem(item.id, {
+                                  modo_preco_personalizado: 'preco',
+                                  preco_personalizado: item.valor_unitario > 0 ? item.valor_unitario : item.preco_base,
+                                })
+                              }
+                              className="h-7 px-2 text-xs"
+                            >
+                              Preco fixo
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={item.modo_preco_personalizado === 'margem' ? 'default' : 'outline'}
+                              onClick={() =>
+                                atualizarPrecoItem(item.id, {
+                                  modo_preco_personalizado: 'margem',
+                                  margem_personalizada:
+                                    item.margem_personalizada !== null && item.margem_personalizada !== undefined
+                                      ? item.margem_personalizada
+                                      : 0,
+                                })
+                              }
+                              className="h-7 px-2 text-xs"
+                            >
+                              Margem %
+                            </Button>
+                          </div>
+                          {item.modo_preco_personalizado === 'preco' && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-xs text-slate-600">R$</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.preco_personalizado ?? ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value;
+                                  atualizarPrecoItem(item.id, {
+                                    preco_personalizado: valor === '' ? null : Number(valor),
+                                  });
+                                }}
+                                className="w-28 rounded border border-slate-300 px-2 py-1 text-sm"
+                                placeholder="0,00"
+                              />
+                            </div>
+                          )}
+                          {item.modo_preco_personalizado === 'margem' && (
+                            <div className="mt-2 flex items-center gap-2">
+                              <span className="text-xs text-slate-600">Margem</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.margem_personalizada ?? ''}
+                                onChange={(e) => {
+                                  const valor = e.target.value;
+                                  atualizarPrecoItem(item.id, {
+                                    margem_personalizada: valor === '' ? null : Number(valor),
+                                  });
+                                }}
+                                className="w-28 rounded border border-slate-300 px-2 py-1 text-sm"
+                                placeholder="0,00"
+                              />
+                              <span className="text-xs text-slate-600">%</span>
+                            </div>
+                          )}
+                          <p className="mt-2 text-[11px] text-slate-500">
+                            Base: R$ {item.preco_base.toFixed(2)} | Custo: R$ {item.preco_custo.toFixed(2)}
                           </p>
                         </div>
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -710,7 +864,6 @@ export const PDVPage: React.FC = () => {
                           value={buscaCliente}
                           onChange={(e) => setBuscaCliente(e.target.value)}
                           className="mb-3"
-                          size="sm"
                         />
                         <div className="max-h-48 overflow-y-auto border border-gray-200 rounded">
                           {clientes.length === 0 ? (
@@ -799,7 +952,6 @@ export const PDVPage: React.FC = () => {
                             placeholder="Nome do cliente"
                             value={dadosCliente.nome}
                             onChange={(e) => setDadosCliente({ ...dadosCliente, nome: e.target.value })}
-                            size="sm"
                           />
                           <Input
                             placeholder="CPF ou CNPJ"
@@ -809,7 +961,6 @@ export const PDVPage: React.FC = () => {
                               const formatado = valor ? formatarDocumento(valor) : '';
                               setDadosCliente({ ...dadosCliente, documento: formatado });
                             }}
-                            size="sm"
                           />
                           <Button
                             size="sm"
@@ -861,46 +1012,39 @@ export const PDVPage: React.FC = () => {
                               setEnderecoEntrega({...enderecoEntrega, cep: aplicarMascaraCep(enderecoEntrega.cep)});
                               buscarCep();
                             }}
-                            size="sm"
                           />
                           <Input
                             placeholder="Endereço"
                             value={enderecoEntrega.endereco}
                             onChange={(e) => setEnderecoEntrega({...enderecoEntrega, endereco: e.target.value})}
-                            size="sm"
                           />
                           <div className="flex gap-2">
                             <Input
                               placeholder="Número"
                               value={enderecoEntrega.numero}
                               onChange={(e) => setEnderecoEntrega({...enderecoEntrega, numero: e.target.value})}
-                              size="sm"
                             />
                             <Input
                               placeholder="Complemento"
                               value={enderecoEntrega.complemento}
                               onChange={(e) => setEnderecoEntrega({...enderecoEntrega, complemento: e.target.value})}
-                              size="sm"
                             />
                           </div>
                           <Input
                             placeholder="Bairro"
                             value={enderecoEntrega.bairro}
                             onChange={(e) => setEnderecoEntrega({...enderecoEntrega, bairro: e.target.value})}
-                            size="sm"
                           />
                           <div className="flex gap-2">
                             <Input
                               placeholder="Cidade"
                               value={enderecoEntrega.cidade}
                               onChange={(e) => setEnderecoEntrega({...enderecoEntrega, cidade: e.target.value})}
-                              size="sm"
                             />
                             <Input
                               placeholder="UF"
                               value={enderecoEntrega.estado.toUpperCase()}
                               onChange={(e) => setEnderecoEntrega({...enderecoEntrega, estado: e.target.value.toUpperCase().slice(0, 2)})}
-                              size="sm"
                             />
                           </div>
                         </div>
