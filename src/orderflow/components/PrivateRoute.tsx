@@ -4,10 +4,11 @@ import { useAuth } from '../hooks/useAuth';
 
 interface PrivateRouteProps {
   children: React.ReactNode;
+  requireAdmin?: boolean;
 }
 
-export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children, requireAdmin = false }) => {
+  const { isAuthenticated, isLoading, isAdmin } = useAuth();
 
   if (isLoading) {
     return (
@@ -19,6 +20,10 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (requireAdmin && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

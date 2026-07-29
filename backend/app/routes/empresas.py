@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.core.database import get_db
 from app.routes.auth import get_current_user
-from app.models import Empresa
+from app.models import Empresa, Usuario
 from app.schemas import EmpresaCreate, EmpresaResponse, EmpresaUpdate
+from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/empresas", tags=["Empresas"])
+
+
+def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
+    """Obtém o objeto Usuario completo a partir do token"""
+    return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
 
 
 @router.get("", response_model=List[EmpresaResponse])
@@ -55,6 +61,7 @@ def obter_empresa(
 @router.post("", response_model=EmpresaResponse)
 def criar_empresa(
     empresa_data: EmpresaCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -72,6 +79,20 @@ def criar_empresa(
     db.commit()
     db.refresh(empresa)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="criar",
+        entidade="empresa",
+        entidade_id=empresa.id,
+        descricao=f"Empresa '{empresa.nome}' (CNPJ: {empresa.cnpj}) criada por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return empresa
 
 
@@ -79,6 +100,7 @@ def criar_empresa(
 def atualizar_empresa(
     empresa_id: int,
     empresa_data: EmpresaUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -99,12 +121,27 @@ def atualizar_empresa(
     db.commit()
     db.refresh(empresa)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="editar",
+        entidade="empresa",
+        entidade_id=empresa.id,
+        descricao=f"Empresa '{empresa.nome}' atualizada por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return empresa
 
 
 @router.delete("/{empresa_id}")
 def deletar_empresa(
     empresa_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -117,7 +154,22 @@ def deletar_empresa(
             detail="Empresa não encontrada"
         )
     
+    descricao = f"Empresa '{empresa.nome}' (CNPJ: {empresa.cnpj}) deletada"
     db.delete(empresa)
     db.commit()
+    
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="excluir",
+        entidade="empresa",
+        entidade_id=empresa_id,
+        descricao=f"{descricao} por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
     
     return {"detail": "Empresa deletada com sucesso"}

@@ -1,21 +1,44 @@
 from pydantic import BaseModel, EmailStr, field_validator
-from typing import Optional
+from typing import Optional, Literal
 from datetime import datetime, date
+
+
+# Enumeração de perfis
+PerfilUsuario = Literal["admin", "operador"]
 
 
 class UsuarioBase(BaseModel):
     username: str
     email: EmailStr
+    nome: Optional[str] = None
 
 
 class UsuarioCreate(UsuarioBase):
     password: str
+    perfil: Optional[PerfilUsuario] = "operador"
+
+
+class UsuarioUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
+    nome: Optional[str] = None
+    perfil: Optional[PerfilUsuario] = None
+    is_active: Optional[bool] = None
+
+
+class UsuarioTrocaSenha(BaseModel):
+    senha_atual: str
+    nova_senha: str
+
+
+class UsuarioResetSenha(BaseModel):
+    nova_senha: str
 
 
 class UsuarioResponse(UsuarioBase):
     id: int
     is_active: bool
-    is_admin: bool
+    perfil: PerfilUsuario
     created_at: datetime
     
     class Config:
@@ -113,6 +136,8 @@ class VendaCreate(BaseModel):
 
 class VendaResponse(VendaBase):
     id: int
+    usuario_id: Optional[int] = None
+    usuario_nome: Optional[str] = None
     data_venda: datetime
     status: str
     created_at: datetime
@@ -217,3 +242,26 @@ class ClienteResponse(ClienteBase):
     
     class Config:
         from_attributes = True
+
+
+class AuditLogResponse(BaseModel):
+    id: int
+    acao: str
+    entidade: str
+    entidade_id: Optional[str] = None
+    descricao: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class AuditLogFilter(BaseModel):
+    acao: Optional[str] = None
+    entidade: Optional[str] = None
+    user_id: Optional[int] = None
+    data_inicio: Optional[datetime] = None
+    data_fim: Optional[datetime] = None

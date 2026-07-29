@@ -12,6 +12,9 @@ import { PDVPage } from './pages/PDVPage';
 import { VendasPage } from './pages/VendasPage';
 import { EmpresaPage } from './pages/EmpresaPage';
 import { PerdasPage } from './pages/PerdasPage';
+import { TrocarSenhaPage } from './pages/TrocarSenhaPage';
+import { UsuariosPage } from './pages/UsuariosPage';
+import { AuditoriaPage } from './pages/AuditoriaPage';
 
 export const OrderFlowApp: React.FC = () => {
   return (
@@ -75,6 +78,32 @@ export const OrderFlowApp: React.FC = () => {
             element={
               <PrivateRoute>
                 <PerdasPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/trocar-senha"
+            element={
+              <PrivateRoute>
+                <TrocarSenhaPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Admin-only Routes */}
+          <Route
+            path="/usuarios"
+            element={
+              <PrivateRoute requireAdmin>
+                <UsuariosPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/auditoria"
+            element={
+              <PrivateRoute requireAdmin>
+                <AuditoriaPage />
               </PrivateRoute>
             }
           />

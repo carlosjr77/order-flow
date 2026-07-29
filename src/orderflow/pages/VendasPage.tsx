@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Undo } from 'lucide-react';
+import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAuth();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<Venda | null>(null);
@@ -36,12 +38,8 @@ export const VendasPage: React.FC = () => {
 
   const loadEmpresaDados = async () => {
     try {
-      const dados = await apiClient.obterDadosEmpresa();
-      if (dados) {
-        setEmpresaDados(dados);
-      } else {
-        setEmpresaDados(null);
-      }
+      const dados = (await apiClient.obterDadosEmpresa()) as DadosEmpresa | null;
+      setEmpresaDados(dados);
     } catch (error) {
       console.error('Erro ao carregar dados da empresa:', error);
       setEmpresaDados(null);
@@ -51,7 +49,7 @@ export const VendasPage: React.FC = () => {
   const loadVendas = async () => {
     try {
       setIsLoading(true);
-      const data = await apiClient.listarVendas(0, 1000);
+      const data = (await apiClient.listarVendas(0, 1000)) as Venda[];
       setVendas(data.sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime()));
     } catch (error) {
       console.error('Erro ao carregar vendas:', error);
@@ -62,10 +60,8 @@ export const VendasPage: React.FC = () => {
 
   const downloadComprovante = async (venda: Venda) => {
     try {
-      // Buscar detalhes completos da venda (com itens completos)
-      const vendaDetalhes = await apiClient.obterVenda(venda.id);
+      const vendaDetalhes = (await apiClient.obterVenda(venda.id)) as Venda;
       
-      // Mapear itens com dados completos
       const documentoItens = vendaDetalhes.itens?.map((item) => ({
         ...item,
         descricao: item.descricao || 'Produto',
@@ -78,13 +74,11 @@ export const VendasPage: React.FC = () => {
         empresa: empresaDados || dadosEmpresaPadrao,
         venda: vendaDetalhes,
         itens: documentoItens,
-        // Usar nome do cliente da venda se disponível
         cliente: vendaDetalhes.nome_cliente ? { nome: vendaDetalhes.nome_cliente, documento: '' } : null,
         entrega: null,
       };
 
       const pdf = await gerarComprovanteDANFE(dadosComprovante);
-      // Incluir nome do cliente no nome do arquivo se disponível
       const nomeCliente = vendaDetalhes.nome_cliente;
       const nomeArquivo = nomeCliente 
         ? `${nomeCliente.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().getTime()}.pdf`
@@ -109,8 +103,9 @@ export const VendasPage: React.FC = () => {
       try {
         await apiClient.cancelarVenda(vendaId);
         loadVendas();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao cancelar venda:', error);
+        alert(error?.message || 'Erro ao cancelar venda. Apenas administradores podem cancelar.');
       }
     }
   };
@@ -120,8 +115,9 @@ export const VendasPage: React.FC = () => {
       try {
         await apiClient.excluirVenda(vendaId);
         loadVendas();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao excluir venda:', error);
+        alert(error?.message || 'Erro ao excluir venda. Apenas administradores podem excluir.');
       }
     }
   };
@@ -163,12 +159,10 @@ export const VendasPage: React.FC = () => {
 
     setIsGeneratingLista(true);
     try {
-      // Buscar detalhes completos de todas as vendas selecionadas
-      const vendasDetalhes = await Promise.all(
+      const vendasDetalhes = (await Promise.all(
         selectedVendasIds.map(id => apiClient.obterVenda(id))
-      );
+      )) as Venda[];
 
-      // Consolidar itens
       const itensConsolidados = consolidarItensVendas(vendasDetalhes);
 
       const dadosListaCompras = {
@@ -183,7 +177,6 @@ export const VendasPage: React.FC = () => {
       const pdf = await gerarListaCompras(dadosListaCompras);
       pdf.save(`Lista_Compras_${new Date().getTime()}.pdf`);
       
-      // Limpar seleção após gerar
       setSelectedVendasIds([]);
     } catch (error) {
       console.error('Erro ao gerar lista de compras:', error);
@@ -201,43 +194,31 @@ export const VendasPage: React.FC = () => {
 
     setIsGeneratingRelatorio(true);
     try {
-      // Buscar detalhes completos de todas as vendas selecionadas
-      // Nota: API ja filtra vendas excluidas (deleted_at) no endpoint obterVenda
-      // Para relatorio, precisamos incluir vendas excluidas tambem
       const vendasDetalhes: any[] = await Promise.all(
         selectedVendasIds.map(id => 
           apiClient.request(`/api/vendas/${id}?include_deleted=true`, 'GET')
         )
       );
 
-      // Calcular totais de venda
       const totalBruto = vendasDetalhes.reduce((sum, v) => sum + Number(v.valor_total), 0);
       const totalFrete = vendasDetalhes.reduce((sum, v) => sum + (Number(v.valor_frete) || 0), 0);
       const totalVendasSemFrete = totalBruto - totalFrete;
 
-      // Calcular total de custo e lucro
       let totalCusto = 0;
 
-      console.log('=== DEBUG VENDAS ===');
       vendasDetalhes.forEach((v: any) => {
-        console.log('Venda:', v.id, 'Itens:', v.itens?.length);
         if (v.itens && v.itens.length > 0) {
           v.itens.forEach((item: any) => {
-            console.log('  Item:', item.descricao, 'preco_custo:', item.preco_custo, 'qtd:', item.quantidade);
             const custoItem = (item.preco_custo || 0) * Number(item.quantidade);
             totalCusto += custoItem;
           });
         }
       });
-      console.log('Total Custo:', totalCusto);
 
-      // Lucro = Total das vendas (com frete) - Total do custo dos produtos
       const totalLucro = totalBruto - totalCusto;
-      // Margem = Lucro / Total das vendas (com frete) * 100
       const margemPercentual = totalBruto > 0 ? (totalLucro / totalBruto) * 100 : 0;
       const totalLiquido = totalVendasSemFrete;
 
-      // Resumo por status com lucro
       const resumoPorStatus: any = {
         concluido: { quantidade: 0, valor: 0, lucro: 0 },
         pendente: { quantidade: 0, valor: 0, lucro: 0 },
@@ -248,7 +229,6 @@ export const VendasPage: React.FC = () => {
         const status = String(v.status).toLowerCase();
         let lucroVenda = Number(v.valor_total);
         
-        // Calcular custo da venda
         if (v.itens && v.itens.length > 0) {
           const custoVenda = v.itens.reduce((sum: number, item: any) => {
             return sum + ((item.preco_custo || 0) * Number(item.quantidade));
@@ -271,13 +251,11 @@ export const VendasPage: React.FC = () => {
         }
       });
 
-      // Resumo por forma de pagamento com lucro
       const resumoPorPagamentoMap = new Map<string, { quantidade: number; valor: number; lucro: number }>();
       vendasDetalhes.forEach((v: any) => {
         const forma = v.forma_pagamento || 'Não informada';
         let lucroVenda = Number(v.valor_total);
         
-        // Calcular custo da venda
         if (v.itens && v.itens.length > 0) {
           const custoVenda = v.itens.reduce((sum: number, item: any) => {
             return sum + ((item.preco_custo || 0) * Number(item.quantidade));
@@ -297,12 +275,10 @@ export const VendasPage: React.FC = () => {
         ...dados,
       }));
 
-      // Encontrar data de inicio e fim
       const datas = vendasDetalhes.map((v: any) => new Date(v.data_venda));
       const dataInicio = new Date(Math.min(...datas.map((d: Date) => d.getTime())));
       const dataFim = new Date(Math.max(...datas.map((d: Date) => d.getTime())));
 
-      // Consolidar produtos (similar a lista de compras, mas com precos)
       const produtosMap = new Map<number, {
         codigo: string;
         descricao: string;
@@ -351,7 +327,7 @@ export const VendasPage: React.FC = () => {
         custo_total: prod.custo_total,
         venda_total: prod.venda_total,
         lucro_total: prod.venda_total - prod.custo_total,
-      })).sort((a, b) => b.venda_total - a.venda_total); // Ordenar por maior venda total
+      })).sort((a, b) => b.venda_total - a.venda_total);
 
       const dadosRelatorio: DadosRelatorioFinanceiro = {
         empresa: empresaDados || dadosEmpresaPadrao,
@@ -374,7 +350,6 @@ export const VendasPage: React.FC = () => {
       const pdf = await gerarRelatorioFinanceiro(dadosRelatorio);
       pdf.save(`Relatorio_Financeiro_${new Date().getTime()}.pdf`);
       
-      // Limpar seleção após gerar
       setSelectedVendasIds([]);
     } catch (error) {
       console.error('Erro ao gerar relatório financeiro:', error);
@@ -494,6 +469,11 @@ export const VendasPage: React.FC = () => {
                              minute: '2-digit',
                            })}
                          </p>
+                         {venda.usuario_nome && (
+                           <p className="text-sm text-gray-600">
+                             Registrado por: <span className="font-medium">{venda.usuario_nome}</span>
+                           </p>
+                         )}
                          {venda.nome_cliente && (
                            <p className="text-sm text-gray-600">Cliente: {venda.nome_cliente}</p>
                          )}
@@ -540,25 +520,29 @@ export const VendasPage: React.FC = () => {
                         >
                           Concluir
                         </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => cancelarVenda(venda.id)}
-                          variant="outline"
-                          className="text-red-600"
-                        >
-                          Cancelar
-                        </Button>
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            onClick={() => cancelarVenda(venda.id)}
+                            variant="outline"
+                            className="text-red-600"
+                          >
+                            Cancelar
+                          </Button>
+                        )}
                       </>
                     )}
-                    <Button
-                      size="sm"
-                      onClick={() => excluirVenda(venda.id)}
-                      variant="outline"
-                      className="text-gray-600 hover:text-gray-800"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Excluir
-                    </Button>
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        onClick={() => excluirVenda(venda.id)}
+                        variant="outline"
+                        className="text-gray-600 hover:text-gray-800"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Excluir
+                      </Button>
+                    )}
                   </div>
                 </Card>
               ))}
@@ -576,6 +560,9 @@ export const VendasPage: React.FC = () => {
                 <p className="text-sm"><span className="font-semibold">Data:</span> {new Date(selectedVenda.data_venda).toLocaleDateString('pt-BR')}</p>
                 <p className="text-sm"><span className="font-semibold">Status:</span> {selectedVenda.status}</p>
                 <p className="text-sm"><span className="font-semibold">Pagamento:</span> {selectedVenda.forma_pagamento || '-'}</p>
+                {selectedVenda.usuario_nome && (
+                  <p className="text-sm"><span className="font-semibold">Registrado por:</span> {selectedVenda.usuario_nome}</p>
+                )}
                 {selectedVenda.valor_frete !== undefined && selectedVenda.valor_frete > 0 && (
                   <p className="text-sm"><span className="font-semibold">Frete:</span> R$ {selectedVenda.valor_frete.toFixed(2)}</p>
                 )}

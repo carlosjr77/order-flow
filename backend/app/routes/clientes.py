@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.routes.auth import get_current_user
-from app.models import Cliente
+from app.models import Cliente, Usuario
 from app.schemas import ClienteCreate, ClienteResponse, ClienteUpdate
+from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/clientes", tags=["Clientes"])
+
+
+def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
+    """Obtém o objeto Usuario completo a partir do token"""
+    return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
 
 
 @router.get("", response_model=List[ClienteResponse])
@@ -50,6 +56,7 @@ def obter_cliente(
 @router.post("", response_model=ClienteResponse)
 def criar_cliente(
     cliente_data: ClienteCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -85,6 +92,20 @@ def criar_cliente(
     db.commit()
     db.refresh(novo_cliente)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="criar",
+        entidade="cliente",
+        entidade_id=novo_cliente.id,
+        descricao=f"Cliente '{novo_cliente.nome}' criado por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return novo_cliente
 
 
@@ -92,6 +113,7 @@ def criar_cliente(
 def atualizar_cliente(
     cliente_id: int,
     cliente_data: ClienteUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -112,12 +134,27 @@ def atualizar_cliente(
     db.commit()
     db.refresh(cliente)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="editar",
+        entidade="cliente",
+        entidade_id=cliente.id,
+        descricao=f"Cliente '{cliente.nome}' atualizado por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return cliente
 
 
 @router.delete("/{cliente_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_cliente(
     cliente_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -130,7 +167,22 @@ def deletar_cliente(
             detail="Cliente não encontrado"
         )
     
+    descricao = f"Cliente '{cliente.nome}' deletado"
     db.delete(cliente)
     db.commit()
+    
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="excluir",
+        entidade="cliente",
+        entidade_id=cliente_id,
+        descricao=f"{descricao} por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
     
     return None

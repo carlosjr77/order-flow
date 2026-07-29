@@ -1,3 +1,5 @@
+import { CriarUsuarioData, AtualizarUsuarioData, TrocaSenhaData } from '../types';
+
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -59,7 +61,13 @@ export class APIClient {
         this.clearToken();
         window.location.href = '/login';
       }
-      throw new Error(`API Error: ${response.statusText}`);
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`API Error ${response.status}: ${errorText}`);
+    }
+
+    // Retornar null para 204 No Content
+    if (response.status === 204) {
+      return null as T;
     }
 
     return response.json();
@@ -76,6 +84,17 @@ export class APIClient {
 
   async getMe() {
     return this.request('/api/auth/me', 'GET');
+  }
+
+  async trocarSenha(senhaAtual: string, novaSenha: string) {
+    return this.request('/api/auth/trocar-senha', 'POST', {
+      senha_atual: senhaAtual,
+      nova_senha: novaSenha,
+    });
+  }
+
+  async logout() {
+    return this.request('/api/auth/logout', 'POST');
   }
 
   // Produtos endpoints
@@ -191,6 +210,75 @@ export class APIClient {
 
   async deletarCliente(id: number) {
     return this.request(`/api/clientes/${id}`, 'DELETE');
+  }
+
+  // Usuários endpoints (apenas admin)
+  async listarUsuarios(skip = 0, limit = 100) {
+    const params = new URLSearchParams();
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    return this.request(`/api/usuarios?${params}`, 'GET');
+  }
+
+  async obterUsuario(id: number) {
+    return this.request(`/api/usuarios/${id}`, 'GET');
+  }
+
+  async criarUsuario(data: CriarUsuarioData) {
+    return this.request('/api/usuarios', 'POST', data);
+  }
+
+  async atualizarUsuario(id: number, data: AtualizarUsuarioData) {
+    return this.request(`/api/usuarios/${id}`, 'PUT', data);
+  }
+
+  async deletarUsuario(id: number) {
+    return this.request(`/api/usuarios/${id}`, 'DELETE');
+  }
+
+  async resetarSenhaUsuario(id: number, novaSenha: string) {
+    return this.request(`/api/usuarios/${id}/resetar-senha`, 'POST', { nova_senha: novaSenha });
+  }
+
+  async reativarUsuario(id: number) {
+    return this.request(`/api/usuarios/${id}/reativar`, 'POST');
+  }
+
+  async listarPerfis() {
+    return this.request('/api/usuarios/perfil/opcoes', 'GET');
+  }
+
+  // Auditoria endpoints (apenas admin)
+  async listarLogs(params?: {
+    skip?: number;
+    limit?: number;
+    acao?: string;
+    entidade?: string;
+    user_id?: number;
+    data_inicio?: string;
+    data_fim?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.skip !== undefined) queryParams.append('skip', params.skip.toString());
+    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.acao) queryParams.append('acao', params.acao);
+    if (params?.entidade) queryParams.append('entidade', params.entidade);
+    if (params?.user_id !== undefined) queryParams.append('user_id', params.user_id.toString());
+    if (params?.data_inicio) queryParams.append('data_inicio', params.data_inicio);
+    if (params?.data_fim) queryParams.append('data_fim', params.data_fim);
+    return this.request(`/api/audit?${queryParams}`, 'GET');
+  }
+
+  async listarAcoesAuditoria() {
+    return this.request('/api/audit/acoes', 'GET');
+  }
+
+  async listarEntidadesAuditoria() {
+    return this.request('/api/audit/entidades', 'GET');
+  }
+
+  async estatisticasAuditoria() {
+    return this.request('/api/audit/estatisticas', 'GET');
   }
 }
 

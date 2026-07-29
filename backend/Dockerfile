@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copiar requirements
@@ -18,12 +19,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código
 COPY . .
 
+# Script de entrypoint para migrations + seed + start
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expor porta
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/docs', timeout=5)"
+    CMD curl -f http://localhost:8000/docs || exit 1
 
-# Iniciar aplicação
-CMD ["sh", "-c", "python init_db_script.py && python seed_db.py && python main.py"]
+# Iniciar aplicação via entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["python", "main.py"]

@@ -5,7 +5,7 @@ import uvicorn
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, produtos, vendas, empresas, clientes
+from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -218,7 +218,7 @@ app = FastAPI(
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -230,6 +230,8 @@ app.include_router(produtos.router)
 app.include_router(vendas.router)
 app.include_router(empresas.router)
 app.include_router(clientes.router)
+app.include_router(usuarios.router)
+app.include_router(audit.router)
 
 
 @app.get("/")

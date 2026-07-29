@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.routes.auth import get_current_user
-from app.models import Produto
+from app.models import Produto, Usuario
 from app.schemas import ProdutoCreate, ProdutoResponse, ProdutoUpdate
+from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/produtos", tags=["Produtos"])
+
+
+def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
+    """Obtém o objeto Usuario completo a partir do token"""
+    return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
 
 
 @router.get("", response_model=List[ProdutoResponse])
@@ -50,6 +56,7 @@ def obter_produto(
 @router.post("", response_model=ProdutoResponse)
 def criar_produto(
     produto_data: ProdutoCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -82,6 +89,20 @@ def criar_produto(
     db.commit()
     db.refresh(novo_produto)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="criar",
+        entidade="produto",
+        entidade_id=novo_produto.id,
+        descricao=f"Produto '{novo_produto.descricao}' (código: {novo_produto.codigo_interno}) criado por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return novo_produto
 
 
@@ -89,6 +110,7 @@ def criar_produto(
 def atualizar_produto(
     produto_id: int,
     produto_data: ProdutoUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -112,12 +134,27 @@ def atualizar_produto(
     db.commit()
     db.refresh(produto)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="editar",
+        entidade="produto",
+        entidade_id=produto.id,
+        descricao=f"Produto '{produto.descricao}' (código: {produto.codigo_interno}) atualizado por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return produto
 
 
 @router.delete("/{produto_id}")
 def deletar_produto(
     produto_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -130,8 +167,23 @@ def deletar_produto(
             detail="Produto não encontrado"
         )
     
+    descricao = f"Produto '{produto.descricao}' (código: {produto.codigo_interno}) deletado"
     db.delete(produto)
     db.commit()
+    
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="excluir",
+        entidade="produto",
+        entidade_id=produto_id,
+        descricao=f"{descricao} por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
     
     return {"message": "Produto deletado com sucesso"}
 
@@ -140,6 +192,7 @@ def deletar_produto(
 def adicionar_estoque(
     produto_id: int,
     quantidade: float,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -157,6 +210,20 @@ def adicionar_estoque(
     db.commit()
     db.refresh(produto)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="ajuste_estoque",
+        entidade="produto",
+        entidade_id=produto.id,
+        descricao=f"Estoque do produto '{produto.descricao}' adicionado em {quantidade} unidades por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return {
         "message": "Estoque atualizado",
         "produto_id": produto.id,
@@ -168,6 +235,7 @@ def adicionar_estoque(
 def remover_estoque(
     produto_id: int,
     quantidade: float,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -190,6 +258,20 @@ def remover_estoque(
     db.add(produto)
     db.commit()
     db.refresh(produto)
+    
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="ajuste_estoque",
+        entidade="produto",
+        entidade_id=produto.id,
+        descricao=f"Estoque do produto '{produto.descricao}' removido em {quantidade} unidades por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
     
     return {
         "message": "Estoque reduzido",

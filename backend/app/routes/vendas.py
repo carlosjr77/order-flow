@@ -1,14 +1,43 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from decimal import Decimal
 from app.core.database import get_db
 from app.routes.auth import get_current_user
-from app.models import Venda, ItemVenda, Produto
+from app.models import Venda, ItemVenda, Produto, Usuario
 from app.schemas import VendaCreate, VendaResponse, VendaDetailResponse
+from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/vendas", tags=["Vendas"])
+
+
+def check_operador_restrito(current_user: dict):
+    """Verifica se o usuário é operador e nega operações restritas"""
+    if current_user.get("perfil") == "operador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operadores não têm permissão para executar esta ação"
+        )
+
+
+def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
+    """Obtém o objeto Usuario completo a partir do token"""
+    return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
+
+
+def venda_to_dict(venda: Venda, db: Session) -> dict:
+    """Converte uma venda em dicionário incluindo nome do usuário"""
+    data = {column.name: getattr(venda, column.name) for column in venda.__table__.columns}
+    
+    # Buscar nome do usuário que registrou a venda
+    if venda.usuario_id:
+        usuario = db.query(Usuario).filter(Usuario.id == venda.usuario_id).first()
+        data["usuario_nome"] = usuario.nome or usuario.username if usuario else None
+    else:
+        data["usuario_nome"] = None
+    
+    return data
 
 
 @router.get("", response_model=List[VendaDetailResponse])
@@ -40,7 +69,7 @@ def listar_vendas(
             ItemVenda.deleted_at.is_(None)
         ).all()
         resultado.append({
-            **{column.name: getattr(venda, column.name) for column in venda.__table__.columns},
+            **venda_to_dict(venda, db),
             "itens": itens
         })
     
@@ -78,18 +107,6 @@ def obter_venda(
     
     itens = query_itens.all()
     
-    # Debug: verificar se existem itens excluidos
-    itens_excluidos = db.query(ItemVenda).filter(
-        ItemVenda.venda_id == venda_id,
-        ItemVenda.deleted_at.isnot(None)
-    ).count()
-    if itens_excluidos > 0:
-        print(f"DEBUG: Venda {venda_id} tem {itens_excluidos} itens excluidos logicamente")
-    
-    # Debug: verificar total de itens no banco
-    total_itens = db.query(ItemVenda).filter(ItemVenda.venda_id == venda_id).count()
-    print(f"DEBUG: Venda {venda_id} tem {total_itens} itens no total, {len(itens)} ativos")
-    
     # Formatando itens com dados do produto
     itens_formatados = []
     for item, produto in itens:
@@ -102,7 +119,7 @@ def obter_venda(
         itens_formatados.append(item_dict)
     
     return {
-        **{column.name: getattr(venda, column.name) for column in venda.__table__.columns},
+        **venda_to_dict(venda, db),
         "itens": itens_formatados
     }
 
@@ -110,6 +127,7 @@ def obter_venda(
 @router.post("", response_model=VendaResponse)
 def criar_venda(
     venda_data: VendaCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -121,12 +139,15 @@ def criar_venda(
             detail="Venda deve ter pelo menos um item"
         )
     
+    usuario = get_usuario_logado(db, current_user)
+    
     # Calcular value total
     valor_total = Decimal("0")
     valor_frete = Decimal(str(venda_data.valor_frete or 0))
     
     # Criar venda
     nova_venda = Venda(
+        usuario_id=usuario.id if usuario else None,
         status="pendente",
         forma_pagamento=venda_data.forma_pagamento,
         observacoes=venda_data.observacoes,
@@ -179,12 +200,26 @@ def criar_venda(
     db.commit()
     db.refresh(nova_venda)
     
+    # Registrar auditoria
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="criar",
+        entidade="venda",
+        entidade_id=nova_venda.id,
+        descricao=f"Venda #{nova_venda.id} criada por '{usuario_nome}' no valor de R$ {float(nova_venda.valor_total):.2f}",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return nova_venda
 
 
 @router.put("/{venda_id}/concluir")
 def concluir_venda(
     venda_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -205,16 +240,34 @@ def concluir_venda(
     db.commit()
     db.refresh(venda)
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="concluir",
+        entidade="venda",
+        entidade_id=venda.id,
+        descricao=f"Venda #{venda.id} concluída por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return {"message": "Venda concluída com sucesso", "venda_id": venda.id}
 
 
 @router.put("/{venda_id}/cancelar")
 def cancelar_venda(
     venda_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Cancela uma venda e reverte o estoque"""
+    """Cancela uma venda e reverte o estoque - RESTRITO A ADMIN"""
+    # RBAC: apenas admin pode cancelar
+    check_operador_restrito(current_user)
+    
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
@@ -242,16 +295,34 @@ def cancelar_venda(
     db.add(venda)
     db.commit()
     
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="cancelar",
+        entidade="venda",
+        entidade_id=venda.id,
+        descricao=f"Venda #{venda.id} cancelada por '{usuario_nome}' e estoque revertido",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
     return {"message": "Venda cancelada e estoque revertido", "venda_id": venda.id}
 
 
 @router.delete("/{venda_id}")
 def excluir_venda(
     venda_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Exclusão lógica de venda - marca como excluída sem remover do banco"""
+    """Exclusão lógica de venda - RESTRITO A ADMIN"""
+    # RBAC: apenas admin pode excluir
+    check_operador_restrito(current_user)
+    
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
@@ -278,5 +349,19 @@ def excluir_venda(
         db.add(item)
     
     db.commit()
+    
+    # Registrar auditoria
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    registrar_auditoria(
+        db=db,
+        acao="excluir",
+        entidade="venda",
+        entidade_id=venda.id,
+        descricao=f"Venda #{venda.id} excluída (exclusão lógica) por '{usuario_nome}'",
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
     
     return {"message": "Venda excluída com sucesso (exclusão lógica)", "venda_id": venda.id}

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Numeric, String, DateTime, Date
+from sqlalchemy import Column, Integer, Numeric, String, DateTime, Date, ForeignKey
 from sqlalchemy.sql import func
 from app.core.database import Base
 
@@ -8,6 +8,7 @@ class Venda(Base):
     __tablename__ = "vendas"
     
     id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)  # Usuário que registrou a venda
     data_venda = Column(DateTime, server_default=func.now(), index=True, default=func.now())
     data_entrega = Column(Date, nullable=True)  # Data de entrega (pode ser passado ou futuro)
     valor_total = Column(Numeric(10, 2), nullable=False, default=0)

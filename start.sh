@@ -36,6 +36,9 @@ source venv/Scripts/activate  # Windows
 
 pip install -r requirements.txt -q
 
+echo "🔄 Executando setup do banco de dados (migrations + seed)..."
+python seed_db.py
+
 echo "✅ Backend iniciando em http://localhost:8000"
 python main.py &
 

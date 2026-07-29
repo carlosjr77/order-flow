@@ -1,11 +1,14 @@
 // Types for Order Flow Application
 
+export type PerfilUsuario = 'admin' | 'operador';
+
 export interface Usuario {
   id: number;
   username: string;
   email: string;
+  nome?: string;
   is_active: boolean;
-  is_admin: boolean;
+  perfil: PerfilUsuario;
   created_at: string;
 }
 
@@ -56,6 +59,8 @@ export interface ItemVenda {
 
 export interface Venda {
   id: number;
+  usuario_id?: number;
+  usuario_nome?: string;
   data_venda: string;
   data_entrega?: string; // Data de entrega (pode ser passado ou futuro)
   valor_total: number;
@@ -107,4 +112,37 @@ export interface DadosEmpresa {
   telefone?: string;
   email?: string;
   margem_lucro_padrao?: number | null;  // Margem padrão da empresa (1.0 = 100%)
+}
+
+export interface AuditLog {
+  id: number;
+  acao: string;
+  entidade: string;
+  entidade_id?: string;
+  descricao?: string;
+  ip_address?: string;
+  user_id?: number;
+  user_name?: string;
+  created_at: string;
+}
+
+export interface CriarUsuarioData {
+  username: string;
+  email: string;
+  nome?: string;
+  password: string;
+  perfil: PerfilUsuario;
+}
+
+export interface AtualizarUsuarioData {
+  username?: string;
+  email?: string;
+  nome?: string;
+  perfil?: PerfilUsuario;
+  is_active?: boolean;
+}
+
+export interface TrocaSenhaData {
+  senha_atual: string;
+  nova_senha: string;
 }

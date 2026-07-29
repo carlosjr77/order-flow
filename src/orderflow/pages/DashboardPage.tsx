@@ -5,10 +5,10 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalProdutos: 0,
@@ -25,8 +25,8 @@ export const DashboardPage: React.FC = () => {
   const loadStats = async () => {
     try {
       setIsLoading(true);
-      const produtos: Produto[] = await apiClient.listarProdutos(0, 1000);
-      const vendas: Venda[] = await apiClient.listarVendas(0, 1000);
+      const produtos = (await apiClient.listarProdutos(0, 1000)) as Produto[];
+      const vendas = (await apiClient.listarVendas(0, 1000)) as Venda[];
 
       const totalEstoque = produtos.reduce((acc, p) => acc + p.estoque_atual, 0);
       const valorTotal = vendas.reduce((acc, v) => acc + v.valor_total, 0);
@@ -73,7 +73,14 @@ export const DashboardPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Gestão de Vendas</h1>
-            <p className="text-sm text-gray-600">Bem-vindo, {usuario?.username}!</p>
+            <p className="text-sm text-gray-600">
+              Bem-vindo, {usuario?.nome || usuario?.username}!
+              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+              }`}>
+                {isAdmin ? 'Administrador' : 'Operador'}
+              </span>
+            </p>
           </div>
           <Button
             onClick={handleLogout}
@@ -166,6 +173,31 @@ export const DashboardPage: React.FC = () => {
             onClick={() => navigate('/perdas')}
             color="bg-red-50 hover:bg-red-100"
           />
+          <QuickAccessCard
+            title="Trocar Senha"
+            description="Alterar sua senha"
+            icon={<Shield className="w-8 h-8" />}
+            onClick={() => navigate('/trocar-senha')}
+            color="bg-teal-50 hover:bg-teal-100"
+          />
+          {isAdmin && (
+            <>
+              <QuickAccessCard
+                title="Usuários"
+                description="Gerenciar usuários e permissões"
+                icon={<Users className="w-8 h-8" />}
+                onClick={() => navigate('/usuarios')}
+                color="bg-pink-50 hover:bg-pink-100"
+              />
+              <QuickAccessCard
+                title="Logs do Sistema"
+                description="Auditoria e rastreabilidade"
+                icon={<ClipboardList className="w-8 h-8" />}
+                onClick={() => navigate('/auditoria')}
+                color="bg-gray-50 hover:bg-gray-100"
+              />
+            </>
+          )}
         </div>
       </main>
     </div>

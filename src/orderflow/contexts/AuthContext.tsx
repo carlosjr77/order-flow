@@ -1,13 +1,16 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { Usuario, AuthResponse } from '../types';
+import { Usuario, AuthResponse, PerfilUsuario } from '../types';
 import { apiClient } from '../services/api';
 
 interface AuthContextType {
   usuario: Usuario | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isAdmin: boolean;
+  isOperador: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  trocarSenha: (senhaAtual: string, novaSenha: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,6 +18,9 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isAdmin = usuario?.perfil === 'admin';
+  const isOperador = usuario?.perfil === 'operador';
 
   // Verificar se já está autenticado ao carregar
   useEffect(() => {
@@ -52,10 +58,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    // Registrar logout no backend (melhor effort)
+    apiClient.logout().catch(() => {});
     apiClient.clearToken();
     setUsuario(null);
     localStorage.removeItem('usuario');
     localStorage.removeItem('access_token');
+  };
+
+  const trocarSenha = async (senhaAtual: string, novaSenha: string) => {
+    await apiClient.trocarSenha(senhaAtual, novaSenha);
   };
 
   return (
@@ -64,8 +76,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         usuario,
         isLoading,
         isAuthenticated: !!usuario,
+        isAdmin,
+        isOperador,
         login,
         logout,
+        trocarSenha,
       }}
     >
       {children}
