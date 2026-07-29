@@ -63,12 +63,14 @@ export interface Venda {
   usuario_nome?: string;
   data_venda: string;
   data_entrega?: string; // Data de entrega (pode ser passado ou futuro)
+  data_vencimento?: string; // Data de vencimento do pedido (opcional)
   valor_total: number;
   valor_frete?: number;
   status: 'pendente' | 'concluído' | 'cancelado';
   forma_pagamento?: string;
   observacoes?: string;
   nome_cliente?: string;
+  motivo_cancelamento?: string;
   itens?: ItemVenda[];
   created_at: string;
   updated_at: string;

@@ -189,18 +189,23 @@ export const AuditoriaPage: React.FC = () => {
             {logs.map((log) => (
               <Card key={log.id} className="p-4">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getAcaoColor(log.acao)}`}>
-                        {log.acao}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                        Entidade: <span className="font-medium">{log.entidade}</span>
-                        {log.entidade_id && ` #${log.entidade_id}`}
-                      </span>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getAcaoColor(log.acao)}`}>
+                          {log.acao}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          Entidade: <span className="font-medium">{log.entidade}</span>
+                          {log.entidade_id && ` #${log.entidade_id}`}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-800">{log.descricao}</p>
+                      {log.descricao && log.descricao.includes('Motivo:') && (
+                        <p className="mt-1 text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded inline-block">
+                          {log.descricao.split('Motivo:')[1]?.trim()}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-sm text-gray-800">{log.descricao}</p>
-                  </div>
                   <div className="text-right text-xs text-gray-500 md:min-w-[200px]">
                     <p>Usuário: {log.user_name || `ID ${log.user_id}`}</p>
                     {log.ip_address && <p>IP: {log.ip_address}</p>}

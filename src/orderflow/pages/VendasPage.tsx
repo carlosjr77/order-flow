@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 
@@ -18,6 +19,12 @@ export const VendasPage: React.FC = () => {
   const [selectedVendasIds, setSelectedVendasIds] = useState<number[]>([]);
   const [isGeneratingLista, setIsGeneratingLista] = useState(false);
   const [isGeneratingRelatorio, setIsGeneratingRelatorio] = useState(false);
+  const [modalMotivo, setModalMotivo] = useState<{
+    aberto: boolean;
+    tipo: 'cancelar' | 'excluir' | null;
+    vendaId: number | null;
+  }>({ aberto: false, tipo: null, vendaId: null });
+  const [motivoTexto, setMotivoTexto] = useState('');
 
   // Dados padrão em caso de nenhuma empresa cadastrada
   const dadosEmpresaPadrao: DadosEmpresa = {
@@ -98,28 +105,39 @@ export const VendasPage: React.FC = () => {
     }
   };
 
-  const cancelarVenda = async (vendaId: number) => {
-    if (confirm('Tem certeza que deseja cancelar esta venda?')) {
-      try {
-        await apiClient.cancelarVenda(vendaId);
-        loadVendas();
-      } catch (error: any) {
-        console.error('Erro ao cancelar venda:', error);
-        alert(error?.message || 'Erro ao cancelar venda. Apenas administradores podem cancelar.');
+  const abrirModalMotivo = (vendaId: number, tipo: 'cancelar' | 'excluir') => {
+    setModalMotivo({ aberto: true, tipo, vendaId });
+    setMotivoTexto('');
+  };
+
+  const fecharModalMotivo = () => {
+    setModalMotivo({ aberto: false, tipo: null, vendaId: null });
+    setMotivoTexto('');
+  };
+
+  const confirmarAcaoComMotivo = async () => {
+    if (!modalMotivo.vendaId || !modalMotivo.tipo) return;
+
+    try {
+      if (modalMotivo.tipo === 'cancelar') {
+        await apiClient.cancelarVenda(modalMotivo.vendaId, motivoTexto);
+      } else {
+        await apiClient.excluirVenda(modalMotivo.vendaId, motivoTexto);
       }
+      fecharModalMotivo();
+      loadVendas();
+    } catch (error: any) {
+      console.error(`Erro ao ${modalMotivo.tipo} venda:`, error);
+      alert(error?.message || `Erro ao ${modalMotivo.tipo} venda. Apenas administradores podem executar esta ação.`);
     }
   };
 
-  const excluirVenda = async (vendaId: number) => {
-    if (confirm('Tem certeza que deseja excluir esta venda? Ela sera removida da lista, mas os dados permanecerão no banco para relatórios.')) {
-      try {
-        await apiClient.excluirVenda(vendaId);
-        loadVendas();
-      } catch (error: any) {
-        console.error('Erro ao excluir venda:', error);
-        alert(error?.message || 'Erro ao excluir venda. Apenas administradores podem excluir.');
-      }
-    }
+  const cancelarVenda = (vendaId: number) => {
+    abrirModalMotivo(vendaId, 'cancelar');
+  };
+
+  const excluirVenda = (vendaId: number) => {
+    abrirModalMotivo(vendaId, 'excluir');
   };
 
   const getStatusColor = (status: string) => {
@@ -480,6 +498,16 @@ export const VendasPage: React.FC = () => {
                          {venda.forma_pagamento && (
                            <p className="text-sm text-gray-600">Pagamento: {venda.forma_pagamento}</p>
                          )}
+                         {venda.data_vencimento && (
+                           <p className="text-sm text-gray-600">
+                             Vencimento: {new Date(venda.data_vencimento).toLocaleDateString('pt-BR')}
+                           </p>
+                         )}
+                         {venda.motivo_cancelamento && (
+                           <p className="text-sm text-gray-600">
+                             Motivo: <span className="font-medium">{venda.motivo_cancelamento}</span>
+                           </p>
+                         )}
                        </div>
                     </div>
 
@@ -560,11 +588,17 @@ export const VendasPage: React.FC = () => {
                 <p className="text-sm"><span className="font-semibold">Data:</span> {new Date(selectedVenda.data_venda).toLocaleDateString('pt-BR')}</p>
                 <p className="text-sm"><span className="font-semibold">Status:</span> {selectedVenda.status}</p>
                 <p className="text-sm"><span className="font-semibold">Pagamento:</span> {selectedVenda.forma_pagamento || '-'}</p>
+                {selectedVenda.data_vencimento && (
+                  <p className="text-sm"><span className="font-semibold">Vencimento:</span> {new Date(selectedVenda.data_vencimento).toLocaleDateString('pt-BR')}</p>
+                )}
                 {selectedVenda.usuario_nome && (
                   <p className="text-sm"><span className="font-semibold">Registrado por:</span> {selectedVenda.usuario_nome}</p>
                 )}
                 {selectedVenda.valor_frete !== undefined && selectedVenda.valor_frete > 0 && (
                   <p className="text-sm"><span className="font-semibold">Frete:</span> R$ {selectedVenda.valor_frete.toFixed(2)}</p>
+                )}
+                {selectedVenda.motivo_cancelamento && (
+                  <p className="text-sm"><span className="font-semibold">Motivo:</span> {selectedVenda.motivo_cancelamento}</p>
                 )}
               </div>
 
@@ -618,6 +652,48 @@ export const VendasPage: React.FC = () => {
                   className="flex-1"
                 >
                   Fechar
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Modal de Motivo do Cancelamento/Exclusão */}
+        {modalMotivo.aberto && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md p-6">
+              <h2 className="text-xl font-bold mb-4">
+                {modalMotivo.tipo === 'cancelar' ? 'Cancelar Venda' : 'Excluir Venda'}
+              </h2>
+              <p className="text-sm text-gray-600 mb-4">
+                {modalMotivo.tipo === 'cancelar'
+                  ? 'Informe o motivo do cancelamento desta venda:'
+                  : 'Informe o motivo da exclusão desta venda:'}
+              </p>
+              <textarea
+                value={motivoTexto}
+                onChange={(e) => setMotivoTexto(e.target.value)}
+                placeholder="Digite o motivo..."
+                className="w-full px-3 py-2 border border-gray-300 rounded text-sm mb-4"
+                rows={4}
+              />
+              <div className="flex gap-3">
+                <Button
+                  onClick={fecharModalMotivo}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Voltar
+                </Button>
+                <Button
+                  onClick={confirmarAcaoComMotivo}
+                  className={`flex-1 ${
+                    modalMotivo.tipo === 'cancelar'
+                      ? 'bg-red-600 hover:bg-red-700'
+                      : 'bg-gray-700 hover:bg-gray-800'
+                  }`}
+                >
+                  {modalMotivo.tipo === 'cancelar' ? 'Confirmar Cancelamento' : 'Confirmar Exclusão'}
                 </Button>
               </div>
             </Card>

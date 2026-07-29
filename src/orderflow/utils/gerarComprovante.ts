@@ -113,6 +113,11 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   const dataEntregaFormatada = dados.venda.data_entrega 
     ? formatarDataSomenteBrasil(dados.venda.data_entrega)
     : dataFormatada;
+  
+  // Data de vencimento (se preenchida)
+  const dataVencimentoFormatada = dados.venda.data_vencimento
+    ? formatarDataSomenteBrasil(dados.venda.data_vencimento)
+    : null;
 
   // ==========================================
   // FUNÇÕES UTILITÁRIAS DE DESENHO
@@ -275,7 +280,12 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   
   drawDanfeBox(m, y, w * 0.25, 7, "FORMA DE PAGAMENTO", dados.venda.forma_pagamento || "A COMBINAR");
   drawDanfeBox(m + w * 0.25, y, w * 0.25, 7, "STATUS", dados.venda.status ? String(dados.venda.status).toUpperCase() : "-");
-  doc.rect(m + w * 0.50, y, w * 0.50, 7); // Complemento vazio
+  if (dataVencimentoFormatada) {
+    drawDanfeBox(m + w * 0.50, y, w * 0.25, 7, "DATA DE VENCIMENTO", dataVencimentoFormatada, 'right');
+    doc.rect(m + w * 0.75, y, w * 0.25, 7); // Complemento vazio
+  } else {
+    doc.rect(m + w * 0.50, y, w * 0.50, 7); // Complemento vazio
+  }
   y += 7;
 
   // ==================== CÁLCULO ====================

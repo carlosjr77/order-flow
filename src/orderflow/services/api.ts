@@ -151,12 +151,16 @@ export class APIClient {
     return this.request(`/api/vendas/${id}/concluir`, 'PUT');
   }
 
-  async cancelarVenda(id: number) {
-    return this.request(`/api/vendas/${id}/cancelar`, 'PUT');
+  async cancelarVenda(id: number, motivoCancelamento?: string) {
+    return this.request(`/api/vendas/${id}/cancelar`, 'PUT', {
+      motivo_cancelamento: motivoCancelamento || null,
+    });
   }
 
-  async excluirVenda(id: number) {
-    return this.request(`/api/vendas/${id}`, 'DELETE');
+  async excluirVenda(id: number, motivoCancelamento?: string) {
+    return this.request(`/api/vendas/${id}`, 'DELETE', {
+      motivo_cancelamento: motivoCancelamento || null,
+    });
   }
 
   // Empresas endpoints

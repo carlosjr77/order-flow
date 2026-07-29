@@ -68,6 +68,7 @@ export const PDVPage: React.FC = () => {
   const [precoFreteFormatado, setPrecoFreteFormatado] = useState('0,00');
   const [freteFocus, setFreteFocus] = useState(false);
   const [dataEntrega, setDataEntrega] = useState('');
+  const [dataVencimento, setDataVencimento] = useState('');
 
   const dadosEmpresaPadrao: DadosEmpresa = {
     nome: 'Sua Empresa LTDA',
@@ -448,6 +449,7 @@ export const PDVPage: React.FC = () => {
         valor_frete: valorFreteNum,
         nome_cliente: nomeCliente,
         data_entrega: dataEntrega ? dataEntrega : null,
+        data_vencimento: dataVencimento ? dataVencimento : null,
       }) as Venda;
 
       const vendaDetalhes = await apiClient.obterVenda(venda.id) as Venda;
@@ -496,6 +498,7 @@ export const PDVPage: React.FC = () => {
       setObservacoes('');
       setPrecoFreteFormatado('0,00');
       setDataEntrega('');
+      setDataVencimento('');
       setClienteSelecionado(null);
       setBuscaCliente('');
       setDadosCliente({ nome: '', documento: '' });
@@ -1077,6 +1080,23 @@ export const PDVPage: React.FC = () => {
                       />
                       <p className="text-xs text-gray-500 mt-1">
                         Deixe vazio para entrega imediata (data de hoje)
+                      </p>
+                    </div>
+
+                    {/* Data de Vencimento */}
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Data de Vencimento (opcional)
+                      </label>
+                      <Input
+                        type="date"
+                        value={dataVencimento}
+                        onChange={(e) => setDataVencimento(e.target.value)}
+                        className="w-full"
+                        placeholder="Selecione a data de vencimento"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Data de vencimento do pedido para o cliente
                       </p>
                     </div>
 
