@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
+from pydantic import BaseModel
 from app.core.database import get_db
 from app.routes.auth import get_current_user
 from app.models import Venda, ItemVenda, Produto, Usuario
@@ -153,7 +154,8 @@ def criar_venda(
         observacoes=venda_data.observacoes,
         valor_frete=valor_frete,
         nome_cliente=venda_data.nome_cliente,
-        data_entrega=venda_data.data_entrega if venda_data.data_entrega else None
+        data_entrega=venda_data.data_entrega if venda_data.data_entrega else None,
+        data_vencimento=venda_data.data_vencimento if venda_data.data_vencimento else None
     )
     
     db.add(nova_venda)
@@ -257,10 +259,15 @@ def concluir_venda(
     return {"message": "Venda concluída com sucesso", "venda_id": venda.id}
 
 
+class CancelarVendaRequest(BaseModel):
+    motivo_cancelamento: Optional[str] = None
+
+
 @router.put("/{venda_id}/cancelar")
 def cancelar_venda(
     venda_id: int,
     request: Request,
+    dados: CancelarVendaRequest = CancelarVendaRequest(),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -292,18 +299,20 @@ def cancelar_venda(
             db.add(produto)
     
     venda.status = "cancelado"
+    venda.motivo_cancelamento = dados.motivo_cancelamento
     db.add(venda)
     db.commit()
     
     # Registrar auditoria
     usuario = get_usuario_logado(db, current_user)
     usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    motivo_texto = f" Motivo: {dados.motivo_cancelamento}" if dados.motivo_cancelamento else ""
     registrar_auditoria(
         db=db,
         acao="cancelar",
         entidade="venda",
         entidade_id=venda.id,
-        descricao=f"Venda #{venda.id} cancelada por '{usuario_nome}' e estoque revertido",
+        descricao=f"Venda #{venda.id} cancelada por '{usuario_nome}' e estoque revertido.{motivo_texto}",
         user_id=usuario.id if usuario else None,
         user_name=usuario_nome,
         ip_address=get_client_ip(request)
@@ -312,10 +321,15 @@ def cancelar_venda(
     return {"message": "Venda cancelada e estoque revertido", "venda_id": venda.id}
 
 
+class ExcluirVendaRequest(BaseModel):
+    motivo_cancelamento: Optional[str] = None
+
+
 @router.delete("/{venda_id}")
 def excluir_venda(
     venda_id: int,
     request: Request,
+    dados: ExcluirVendaRequest = ExcluirVendaRequest(),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -336,6 +350,7 @@ def excluir_venda(
     
     # Marcar venda como excluída
     venda.deleted_at = datetime.now()
+    venda.motivo_cancelamento = dados.motivo_cancelamento
     db.add(venda)
     
     # Marcar todos os itens da venda como excluídos
@@ -353,12 +368,13 @@ def excluir_venda(
     # Registrar auditoria
     usuario = get_usuario_logado(db, current_user)
     usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    motivo_texto = f" Motivo: {dados.motivo_cancelamento}" if dados.motivo_cancelamento else ""
     registrar_auditoria(
         db=db,
         acao="excluir",
         entidade="venda",
         entidade_id=venda.id,
-        descricao=f"Venda #{venda.id} excluída (exclusão lógica) por '{usuario_nome}'",
+        descricao=f"Venda #{venda.id} excluída (exclusão lógica) por '{usuario_nome}'.{motivo_texto}",
         user_id=usuario.id if usuario else None,
         user_name=usuario_nome,
         ip_address=get_client_ip(request)

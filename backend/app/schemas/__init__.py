@@ -123,6 +123,7 @@ class VendaBase(BaseModel):
     observacoes: Optional[str] = None
     nome_cliente: Optional[str] = None
     data_entrega: Optional[date] = None  # Data de entrega
+    data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
 
 
 class VendaCreate(BaseModel):
@@ -132,6 +133,7 @@ class VendaCreate(BaseModel):
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
     data_entrega: Optional[date] = None  # Data de entrega
+    data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
 
 
 class VendaResponse(VendaBase):
@@ -140,15 +142,16 @@ class VendaResponse(VendaBase):
     usuario_nome: Optional[str] = None
     data_venda: datetime
     status: str
+    motivo_cancelamento: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     
     class Config:
         from_attributes = True
     
-    @field_validator('data_entrega', mode='plain')
+    @field_validator('data_entrega', 'data_vencimento', mode='plain')
     @classmethod
-    def convert_data_entrega(cls, v):
+    def converter_datas(cls, v):
         if v is None:
             return None
         if isinstance(v, date):
