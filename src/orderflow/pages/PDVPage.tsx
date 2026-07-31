@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../services/api';
 import { Produto, ItemCarrinho, Venda, DadosEmpresa, Cliente } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle, X, Save } from 'lucide-react';
 import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
 import { useDebounce } from '../hooks/useDebounce';
 import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
@@ -27,6 +27,9 @@ type ItemCarrinhoPDV = ItemCarrinho & {
 
 export const PDVPage: React.FC = () => {
   const navigate = useNavigate();
+  const { vendaId } = useParams<{ vendaId?: string }>();
+  const isModoEdicao = !!vendaId;
+  const vendaIdNumerico = vendaId ? parseInt(vendaId, 10) : null;
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinhoPDV[]>([]);
@@ -40,6 +43,8 @@ export const PDVPage: React.FC = () => {
   const [showModalErro, setShowModalErro] = useState(false);
   const [erroMensagem, setErroMensagem] = useState('');
   const [vendaFinalizada, setVendaFinalizada] = useState<Venda | null>(null);
+  const [isLoadingEdicao, setIsLoadingEdicao] = useState(false);
+  const [concluirAoSalvar, setConcluirAoSalvar] = useState(false);
   
   // Dados do cliente
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -84,6 +89,86 @@ export const PDVPage: React.FC = () => {
   useEffect(() => {
     loadEmpresaDados();
   }, []);
+
+  // Carregar venda para edição quando estiver em modo de edição
+  useEffect(() => {
+    if (isModoEdicao && vendaIdNumerico && produtos.length > 0) {
+      carregarVendaParaEdicao();
+    }
+  }, [isModoEdicao, vendaIdNumerico, produtos.length]);
+
+  const carregarVendaParaEdicao = async () => {
+    if (!vendaIdNumerico) return;
+
+    setIsLoadingEdicao(true);
+    try {
+      const venda = await apiClient.obterVenda(vendaIdNumerico) as Venda;
+
+      if (!venda || !venda.itens) {
+        setErroMensagem('Venda não encontrada ou sem itens.');
+        setShowModalErro(true);
+        return;
+      }
+
+      // Preencher dados do cliente
+      if (venda.nome_cliente) {
+        setDadosCliente({ nome: venda.nome_cliente, documento: '' });
+        setShowDadosCliente(true);
+      }
+
+      // Preencher forma de pagamento
+      setFormaPagamento(venda.forma_pagamento || '');
+
+      // Preencher observações
+      setObservacoes(venda.observacoes || '');
+
+      // Preencher frete
+      const frete = venda.valor_frete || 0;
+      setPrecoFreteFormatado(frete.toLocaleString('pt-BR', { minimumFractionDigits: 2 }));
+
+      // Preencher datas
+      if (venda.data_entrega) {
+        setDataEntrega(new Date(venda.data_entrega).toISOString().split('T')[0]);
+      }
+      if (venda.data_vencimento) {
+        setDataVencimento(new Date(venda.data_vencimento).toISOString().split('T')[0]);
+      }
+
+      // Preencher carrinho com itens da venda
+      const itensCarrinho: ItemCarrinhoPDV[] = venda.itens.map((item, index) => {
+        const produto = produtos.find((p) => p.id === item.produto_id);
+        const precoBase = produto ? getPrecoVenda(produto) : item.valor_unitario;
+        const precoCusto = produto ? produto.preco_custo : 0;
+
+        return {
+          id: index,
+          produto_id: item.produto_id,
+          descricao: item.descricao || produto?.descricao || `Produto ${item.produto_id}`,
+          codigo_interno: item.codigo_interno || produto?.codigo_interno || '',
+          unidade_medida: item.unidade_medida || produto?.unidade_medida || 'UN',
+          ncm: item.ncm || produto?.ncm,
+          quantidade: item.quantidade,
+          valor_unitario: item.valor_unitario,
+          valor_total: item.valor_total,
+          preco_base: precoBase,
+          preco_custo: precoCusto,
+          modo_preco_personalizado: Math.abs(precoBase - item.valor_unitario) > 0.001 ? 'preco' : 'padrao',
+          preco_personalizado: Math.abs(precoBase - item.valor_unitario) > 0.001 ? item.valor_unitario : null,
+          margem_personalizada: null,
+          enviar_bar: false,
+          enviar_cozinha: false,
+        };
+      });
+
+      setCarrinho(itensCarrinho);
+    } catch (error) {
+      console.error('Erro ao carregar venda para edição:', error);
+      setErroMensagem('Erro ao carregar venda para edição.');
+      setShowModalErro(true);
+    } finally {
+      setIsLoadingEdicao(false);
+    }
+  };
 
   // Obter margem geral da empresa (padrão 100% = 1.0)
   const getMargemGeral = () => {
@@ -189,10 +274,11 @@ export const PDVPage: React.FC = () => {
         )
       );
     } else {
+      const novoId = carrinho.length > 0 ? Math.max(...carrinho.map((item) => item.id)) + 1 : 0;
       setCarrinho([
         ...carrinho,
         {
-          id: carrinho.length,
+          id: novoId,
           produto_id: produto.id,
           descricao: produto.descricao,
           codigo_interno: produto.codigo_interno,
@@ -442,15 +528,32 @@ export const PDVPage: React.FC = () => {
       const valorFreteNum = extrairValorMoeda(precoFreteFormatado) || 0;
       const nomeCliente = clienteSelecionado?.nome || (showDadosCliente && dadosCliente.nome ? dadosCliente.nome : null);
 
-      const venda = await apiClient.criarVenda({
-        itens,
-        forma_pagamento: formaPagamento,
-        observacoes: observacoes || null,
-        valor_frete: valorFreteNum,
-        nome_cliente: nomeCliente,
-        data_entrega: dataEntrega ? dataEntrega : null,
-        data_vencimento: dataVencimento ? dataVencimento : null,
-      }) as Venda;
+      let venda: Venda;
+
+      if (isModoEdicao && vendaIdNumerico) {
+        // Editar venda existente
+        venda = await apiClient.editarVenda(vendaIdNumerico, {
+          itens,
+          forma_pagamento: formaPagamento,
+          observacoes: observacoes || null,
+          valor_frete: valorFreteNum,
+          nome_cliente: nomeCliente,
+          data_entrega: dataEntrega ? dataEntrega : null,
+          data_vencimento: dataVencimento ? dataVencimento : null,
+          status: concluirAoSalvar ? 'concluído' : undefined,
+        }) as Venda;
+      } else {
+        // Criar nova venda
+        venda = await apiClient.criarVenda({
+          itens,
+          forma_pagamento: formaPagamento,
+          observacoes: observacoes || null,
+          valor_frete: valorFreteNum,
+          nome_cliente: nomeCliente,
+          data_entrega: dataEntrega ? dataEntrega : null,
+          data_vencimento: dataVencimento ? dataVencimento : null,
+        }) as Venda;
+      }
 
       const vendaDetalhes = await apiClient.obterVenda(venda.id) as Venda;
       
@@ -514,10 +617,11 @@ export const PDVPage: React.FC = () => {
       setShowDadosCliente(false);
       setShowEnderecoEntrega(false);
       setShowListaClientes(false);
+      setConcluirAoSalvar(false);
     } catch (error: any) {
       console.error('Erro ao finalizar venda:', error);
       // Extrair mensagem de erro do backend
-      let errorMsg = 'Erro ao finalizar venda';
+      let errorMsg = isModoEdicao ? 'Erro ao salvar edição da venda' : 'Erro ao finalizar venda';
       if (error.message) {
         try {
           const jsonError = JSON.parse(error.message);
@@ -572,17 +676,36 @@ export const PDVPage: React.FC = () => {
       <header className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')}>
+            <Button variant="outline" size="sm" onClick={() => navigate('/vendas')}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <h1 className="text-2xl font-bold text-gray-900">Frente de Caixa</h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {isModoEdicao ? `Editar Pedido #${vendaId}` : 'Frente de Caixa'}
+              </h1>
+              {isModoEdicao && (
+                <p className="text-sm text-amber-600 font-medium">
+                  Modo Edição - Altere os itens e dados do pedido
+                </p>
+              )}
+            </div>
           </div>
+          {isModoEdicao && (
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+              EDIÇÃO
+            </span>
+          )}
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
+            {isModoEdicao && isLoadingEdicao && (
+              <Card className="mb-6 p-6 text-center text-amber-700 bg-amber-50">
+                Carregando dados do pedido para edição...
+              </Card>
+            )}
             <Card className="mb-6 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-lg font-bold flex-1">Buscar Produtos</h2>
@@ -651,7 +774,9 @@ export const PDVPage: React.FC = () => {
                 <h2 className="text-lg font-bold mb-4">Carrinho</h2>
 
                 {carrinho.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">Carrinho vazio</p>
+                  <p className="text-gray-500 text-center py-8">
+                    {isModoEdicao ? 'Carregando itens do pedido...' : 'Carrinho vazio'}
+                  </p>
                 ) : (
                   <div className="space-y-4">
                     {carrinho.map((item) => (
@@ -1166,14 +1291,43 @@ export const PDVPage: React.FC = () => {
                       </div>
                     </div>
 
+                    {isModoEdicao && (
+                      <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={concluirAoSalvar}
+                            onChange={(e) => setConcluirAoSalvar(e.target.checked)}
+                            className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                          />
+                          <span className="text-sm font-medium text-amber-800">
+                            Concluir venda ao salvar edição
+                          </span>
+                        </label>
+                      </div>
+                    )}
+
                     <div className="sticky bottom-0 -mx-6 mt-2 border-t bg-white/95 px-6 pb-2 pt-3 backdrop-blur">
                       <Button
                         onClick={finalizarVenda}
                         disabled={!formaPagamento}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded font-semibold mb-2"
+                        className={`w-full py-2 rounded font-semibold mb-2 ${
+                          isModoEdicao
+                            ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                            : 'bg-green-600 hover:bg-green-700 text-white'
+                        }`}
                       >
-                        <Download className="w-4 h-4 mr-2" />
-                        Finalizar Venda
+                        {isModoEdicao ? (
+                          <>
+                            <Save className="w-4 h-4 mr-2" />
+                            {concluirAoSalvar ? 'Salvar e Concluir Edição' : 'Salvar Alterações'}
+                          </>
+                        ) : (
+                          <>
+                            <Download className="w-4 h-4 mr-2" />
+                            Finalizar Venda
+                          </>
+                        )}
                       </Button>
                       <Button
                         onClick={() => { 

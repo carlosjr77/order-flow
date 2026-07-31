@@ -7,19 +7,10 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.routes.auth import get_current_user
 from app.models import Venda, ItemVenda, Produto, Usuario
-from app.schemas import VendaCreate, VendaResponse, VendaDetailResponse
+from app.schemas import VendaCreate, VendaUpdate, VendaResponse, VendaDetailResponse
 from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/vendas", tags=["Vendas"])
-
-
-def check_operador_restrito(current_user: dict):
-    """Verifica se o usuário é operador e nega operações restritas"""
-    if current_user.get("perfil") == "operador":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operadores não têm permissão para executar esta ação"
-        )
 
 
 def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
@@ -218,6 +209,303 @@ def criar_venda(
     return nova_venda
 
 
+def formatar_valor(valor) -> str:
+    """Formata um valor numérico para moeda brasileira"""
+    try:
+        return f"R$ {float(valor):.2f}"
+    except (TypeError, ValueError):
+        return str(valor)
+
+
+def formatar_data(data) -> str:
+    """Formata uma data/datetime para string legível"""
+    if data is None:
+        return "Não informado"
+    if isinstance(data, datetime):
+        return data.strftime("%d/%m/%Y %H:%M")
+    return str(data)
+
+
+def item_venda_to_dict(item: ItemVenda, produto: Produto = None) -> dict:
+    """Converte um item de venda em dicionário para comparação"""
+    return {
+        "produto_id": item.produto_id,
+        "descricao": produto.descricao if produto else "",
+        "codigo_interno": produto.codigo_interno if produto else "",
+        "quantidade": float(item.quantidade),
+        "valor_unitario": float(item.valor_unitario),
+        "valor_total": float(item.valor_total),
+        "unidade_medida": produto.unidade_medida if produto else "",
+    }
+
+
+def gerar_descricao_edicao(
+    venda_original: Venda,
+    venda_atualizada: Venda,
+    itens_originais: list,
+    itens_novos: list,
+    produtos_dict: dict
+) -> str:
+    """Gera uma descrição detalhada das alterações em uma venda"""
+    linhas = [f"Edição da Venda #{venda_atualizada.id}"]
+    
+    # Campos da venda
+    campos_venda = {
+        "forma_pagamento": ("Forma de Pagamento", lambda x: x or "Não informado"),
+        "observacoes": ("Observações", lambda x: x or "Não informado"),
+        "nome_cliente": ("Cliente", lambda x: x or "Não informado"),
+        "valor_frete": ("Valor do Frete", formatar_valor),
+        "valor_total": ("Valor Total", formatar_valor),
+        "data_entrega": ("Data de Entrega", formatar_data),
+        "data_vencimento": ("Data de Vencimento", formatar_data),
+        "status": ("Status", lambda x: x or "Não informado"),
+    }
+    
+    alteracoes_venda = []
+    for campo, (label, formatador) in campos_venda.items():
+        original = getattr(venda_original, campo)
+        novo = getattr(venda_atualizada, campo)
+        
+        # Converter Decimal para float para comparação
+        if campo in ("valor_frete", "valor_total"):
+            original = float(original) if original is not None else 0
+            novo = float(novo) if novo is not None else 0
+        
+        if original != novo:
+            alteracoes_venda.append(
+                f"{label}: de '{formatador(original)}' para '{formatador(novo)}'"
+            )
+    
+    if alteracoes_venda:
+        linhas.append("Alterações no pedido:")
+        linhas.extend([f"  - {alt}" for alt in alteracoes_venda])
+    
+    # Comparar itens
+    originais_dict = {item.id: item for item in itens_originais}
+    novos_dict = {}
+    itens_adicionados = []
+    itens_removidos = []
+    itens_alterados = []
+    
+    for item_novo in itens_novos:
+        # Identificar item por produto_id (novos itens não terão id)
+        if hasattr(item_novo, "id") and item_novo.id in originais_dict:
+            novos_dict[item_novo.id] = item_novo
+        else:
+            itens_adicionados.append(item_novo)
+    
+    for item_id, item_original in originais_dict.items():
+        if item_id not in novos_dict:
+            itens_removidos.append(item_original)
+        else:
+            item_novo = novos_dict[item_id]
+            produto = produtos_dict.get(item_original.produto_id)
+            produto_novo = produtos_dict.get(item_novo.produto_id)
+            
+            alteracoes_item = []
+            qtd_original = float(item_original.quantidade)
+            qtd_nova = float(item_novo.quantidade)
+            unit_original = float(item_original.valor_unitario)
+            unit_novo = float(item_novo.valor_unitario)
+            total_original = float(item_original.valor_total)
+            total_novo = float(item_novo.valor_total)
+            
+            if qtd_original != qtd_nova:
+                alteracoes_item.append(f"quantidade: {qtd_original:.3f} → {qtd_nova:.3f}")
+            if abs(unit_original - unit_novo) > 0.001:
+                alteracoes_item.append(f"valor unitário: {formatar_valor(unit_original)} → {formatar_valor(unit_novo)}")
+            if abs(total_original - total_novo) > 0.001:
+                alteracoes_item.append(f"valor total: {formatar_valor(total_original)} → {formatar_valor(total_novo)}")
+            
+            if alteracoes_item:
+                descricao = produto.descricao if produto else f"Produto ID {item_original.produto_id}"
+                itens_alterados.append(f"  - {descricao}: {', '.join(alteracoes_item)}")
+    
+    if itens_adicionados:
+        linhas.append("Itens adicionados:")
+        for item in itens_adicionados:
+            produto = produtos_dict.get(item.produto_id)
+            descricao = produto.descricao if produto else f"Produto ID {item.produto_id}"
+            qtd = float(item.quantidade)
+            unit = float(item.valor_unitario)
+            total = float(item.valor_total)
+            linhas.append(
+                f"  - {descricao}: qtd {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}"
+            )
+    
+    if itens_removidos:
+        linhas.append("Itens removidos:")
+        for item in itens_removidos:
+            produto = produtos_dict.get(item.produto_id)
+            descricao = produto.descricao if produto else f"Produto ID {item.produto_id}"
+            qtd = float(item.quantidade)
+            unit = float(item.valor_unitario)
+            total = float(item.valor_total)
+            linhas.append(
+                f"  - {descricao}: qtd {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}"
+            )
+    
+    if itens_alterados:
+        linhas.append("Itens alterados:")
+        linhas.extend(itens_alterados)
+    
+    if not alteracoes_venda and not itens_adicionados and not itens_removidos and not itens_alterados:
+        linhas.append("Nenhuma alteração identificada nos dados da venda.")
+    
+    return "\n".join(linhas)
+
+
+@router.put("/{venda_id}", response_model=VendaResponse)
+def editar_venda(
+    venda_id: int,
+    venda_data: VendaUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Edita uma venda existente, atualizando dados e itens, ajustando estoque e gerando log detalhado"""
+    
+    if not venda_data.itens:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Venda deve ter pelo menos um item"
+        )
+    
+    venda = db.query(Venda).filter(
+        Venda.id == venda_id,
+        Venda.deleted_at.is_(None)
+    ).first()
+    
+    if not venda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Venda não encontrada"
+        )
+    
+    # Guardar estado original para auditoria
+    venda_original = Venda(
+        forma_pagamento=venda.forma_pagamento,
+        observacoes=venda.observacoes,
+        valor_frete=venda.valor_frete,
+        valor_total=venda.valor_total,
+        nome_cliente=venda.nome_cliente,
+        data_entrega=venda.data_entrega,
+        data_vencimento=venda.data_vencimento,
+        status=venda.status
+    )
+    
+    itens_originais = db.query(ItemVenda).filter(
+        ItemVenda.venda_id == venda_id,
+        ItemVenda.deleted_at.is_(None)
+    ).all()
+    
+    usuario = get_usuario_logado(db, current_user)
+    usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+    
+    # Carregar todos os produtos envolvidos
+    produtos_ids = set(item.produto_id for item in venda_data.itens)
+    for item in itens_originais:
+        produtos_ids.add(item.produto_id)
+    
+    produtos_dict = {}
+    for produto in db.query(Produto).filter(Produto.id.in_(produtos_ids)).all():
+        produtos_dict[produto.id] = produto
+    
+    # 1. Reverter estoque dos itens originais
+    for item in itens_originais:
+        produto = produtos_dict.get(item.produto_id)
+        if produto:
+            produto.estoque_atual += Decimal(str(item.quantidade))
+            db.add(produto)
+    
+    # 2. Marcar itens originais como excluídos (exclusão lógica)
+    for item in itens_originais:
+        item.deleted_at = datetime.now()
+        db.add(item)
+    
+    # 3. Criar novos itens e ajustar estoque
+    valor_total_itens = Decimal("0")
+    valor_frete = Decimal(str(venda_data.valor_frete or 0))
+    novos_itens = []
+    
+    for item in venda_data.itens:
+        produto = produtos_dict.get(item.produto_id)
+        
+        if not produto:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Produto {item.produto_id} não encontrado"
+            )
+        
+        quantidade = Decimal(str(item.quantidade))
+        valor_unitario = Decimal(str(item.valor_unitario))
+        
+        # Verificar estoque apenas se produto não permitir venda sem estoque
+        if produto.estoque_atual < quantidade and not produto.vender_sem_estoque:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Estoque insuficiente para {produto.descricao}. Disponível: {produto.estoque_atual}"
+            )
+        
+        # Reduzir estoque
+        if produto.estoque_atual >= quantidade:
+            produto.estoque_atual -= quantidade
+            db.add(produto)
+        
+        valor_total_item = quantidade * valor_unitario
+        
+        item_venda = ItemVenda(
+            venda_id=venda.id,
+            produto_id=item.produto_id,
+            quantidade=quantidade,
+            valor_unitario=valor_unitario,
+            valor_total=valor_total_item
+        )
+        
+        db.add(item_venda)
+        novos_itens.append(item_venda)
+        valor_total_itens += valor_total_item
+    
+    # 4. Atualizar dados da venda
+    venda.forma_pagamento = venda_data.forma_pagamento
+    venda.observacoes = venda_data.observacoes
+    venda.valor_frete = valor_frete
+    venda.nome_cliente = venda_data.nome_cliente
+    venda.data_entrega = venda_data.data_entrega if venda_data.data_entrega else None
+    venda.data_vencimento = venda_data.data_vencimento if venda_data.data_vencimento else None
+    venda.valor_total = valor_total_itens + valor_frete
+    
+    # Se vier status na requisição, atualiza (ex: concluir ao salvar edição)
+    if venda_data.status:
+        venda.status = venda_data.status
+    
+    db.add(venda)
+    db.commit()
+    db.refresh(venda)
+    
+    # Registrar auditoria detalhada
+    descricao_edicao = gerar_descricao_edicao(
+        venda_original=venda_original,
+        venda_atualizada=venda,
+        itens_originais=itens_originais,
+        itens_novos=novos_itens,
+        produtos_dict=produtos_dict
+    )
+    
+    registrar_auditoria(
+        db=db,
+        acao="editar",
+        entidade="venda",
+        entidade_id=venda.id,
+        descricao=descricao_edicao,
+        user_id=usuario.id if usuario else None,
+        user_name=usuario_nome,
+        ip_address=get_client_ip(request)
+    )
+    
+    return venda
+
+
 @router.put("/{venda_id}/concluir")
 def concluir_venda(
     venda_id: int,
@@ -271,10 +559,7 @@ def cancelar_venda(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Cancela uma venda e reverte o estoque - RESTRITO A ADMIN"""
-    # RBAC: apenas admin pode cancelar
-    check_operador_restrito(current_user)
-    
+    """Cancela uma venda e reverte o estoque"""
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
@@ -333,10 +618,7 @@ def excluir_venda(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Exclusão lógica de venda - RESTRITO A ADMIN"""
-    # RBAC: apenas admin pode excluir
-    check_operador_restrito(current_user)
-    
+    """Exclusão lógica de venda"""
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)

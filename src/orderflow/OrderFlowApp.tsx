@@ -58,6 +58,14 @@ export const OrderFlowApp: React.FC = () => {
             }
           />
           <Route
+            path="/pdv/editar/:vendaId"
+            element={
+              <PrivateRoute>
+                <PDVPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/vendas"
             element={
               <PrivateRoute>

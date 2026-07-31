@@ -136,6 +136,17 @@ class VendaCreate(BaseModel):
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
 
 
+class VendaUpdate(BaseModel):
+    itens: list[ItemVendaBase]
+    forma_pagamento: Optional[str] = None
+    observacoes: Optional[str] = None
+    valor_frete: Optional[float] = 0
+    nome_cliente: Optional[str] = None
+    data_entrega: Optional[date] = None  # Data de entrega
+    data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
+    status: Optional[str] = None  # Permite alterar status ao concluir edição
+
+
 class VendaResponse(VendaBase):
     id: int
     usuario_id: Optional[int] = None

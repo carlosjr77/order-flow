@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { useAuth } from '../hooks/useAuth';
 import { Venda, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square } from 'lucide-react';
+import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Pencil } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<Venda | null>(null);
@@ -103,6 +101,10 @@ export const VendasPage: React.FC = () => {
     } catch (error) {
       console.error('Erro ao concluir venda:', error);
     }
+  };
+
+  const editarVenda = (vendaId: number) => {
+    navigate(`/pdv/editar/${vendaId}`);
   };
 
   const abrirModalMotivo = (vendaId: number, tipo: 'cancelar' | 'excluir') => {
@@ -539,6 +541,15 @@ export const VendasPage: React.FC = () => {
                       <DownloadCloud className="w-4 h-4 mr-1" />
                       Baixar PDF
                     </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => editarVenda(venda.id)}
+                      variant="outline"
+                      className="text-indigo-600 hover:text-indigo-800"
+                    >
+                      <Pencil className="w-4 h-4 mr-1" />
+                      Editar
+                    </Button>
                     {venda.status === 'pendente' && (
                       <>
                         <Button
@@ -548,29 +559,25 @@ export const VendasPage: React.FC = () => {
                         >
                           Concluir
                         </Button>
-                        {isAdmin && (
-                          <Button
-                            size="sm"
-                            onClick={() => cancelarVenda(venda.id)}
-                            variant="outline"
-                            className="text-red-600"
-                          >
-                            Cancelar
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          onClick={() => cancelarVenda(venda.id)}
+                          variant="outline"
+                          className="text-red-600"
+                        >
+                          Cancelar
+                        </Button>
                       </>
                     )}
-                    {isAdmin && (
-                      <Button
-                        size="sm"
-                        onClick={() => excluirVenda(venda.id)}
-                        variant="outline"
-                        className="text-gray-600 hover:text-gray-800"
-                      >
-                        <Trash2 className="w-4 h-4 mr-1" />
-                        Excluir
-                      </Button>
-                    )}
+                    <Button
+                      size="sm"
+                      onClick={() => excluirVenda(venda.id)}
+                      variant="outline"
+                      className="text-gray-600 hover:text-gray-800"
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Excluir
+                    </Button>
                   </div>
                 </Card>
               ))}

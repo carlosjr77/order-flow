@@ -163,6 +163,10 @@ export class APIClient {
     });
   }
 
+  async editarVenda(id: number, data: any) {
+    return this.request(`/api/vendas/${id}`, 'PUT', data);
+  }
+
   // Empresas endpoints
   async listarEmpresas(skip = 0, limit = 100) {
     const params = new URLSearchParams();
