@@ -218,12 +218,15 @@ def formatar_valor(valor) -> str:
 
 
 def formatar_data(data) -> str:
-    """Formata uma data/datetime para string legível"""
+    """Formata uma data/datetime para string legível no padrão dd/MM/yyyy HH:mm:ss"""
     if data is None:
         return "Não informado"
     if isinstance(data, datetime):
-        return data.strftime("%d/%m/%Y %H:%M")
-    return str(data)
+        return data.strftime("%d/%m/%Y %H:%M:%S")
+    try:
+        return datetime.strptime(str(data), "%Y-%m-%d").strftime("%d/%m/%Y")
+    except (TypeError, ValueError):
+        return str(data)
 
 
 def item_venda_to_dict(item: ItemVenda, produto: Produto = None) -> dict:
@@ -246,8 +249,17 @@ def gerar_descricao_edicao(
     itens_novos: list,
     produtos_dict: dict
 ) -> str:
-    """Gera uma descrição detalhada das alterações em uma venda"""
-    linhas = [f"Edição da Venda #{venda_atualizada.id}"]
+    """Gera uma descrição detalhada e bem formatada das alterações em uma venda"""
+    
+    def linha(tipo="=", tamanho=60):
+        return tipo * tamanho
+    
+    linhas = [
+        linha("="),
+        f"  EDIÇÃO DA VENDA #{venda_atualizada.id}",
+        linha("="),
+        "",
+    ]
     
     # Campos da venda
     campos_venda = {
@@ -272,13 +284,18 @@ def gerar_descricao_edicao(
             novo = float(novo) if novo is not None else 0
         
         if original != novo:
-            alteracoes_venda.append(
-                f"{label}: de '{formatador(original)}' para '{formatador(novo)}'"
-            )
+            alteracoes_venda.append((label, formatador(original), formatador(novo)))
     
     if alteracoes_venda:
-        linhas.append("Alterações no pedido:")
-        linhas.extend([f"  - {alt}" for alt in alteracoes_venda])
+        linhas.extend([
+            "📋 ALTERAÇÕES NO PEDIDO",
+            linha("-"),
+        ])
+        for label, de, para in alteracoes_venda:
+            linhas.append(f"  • {label}:")
+            linhas.append(f"      De:  {de}")
+            linhas.append(f"      Para: {para}")
+        linhas.append("")
     
     # Comparar itens
     originais_dict = {item.id: item for item in itens_originais}
@@ -288,7 +305,6 @@ def gerar_descricao_edicao(
     itens_alterados = []
     
     for item_novo in itens_novos:
-        # Identificar item por produto_id (novos itens não terão id)
         if hasattr(item_novo, "id") and item_novo.id in originais_dict:
             novos_dict[item_novo.id] = item_novo
         else:
@@ -300,9 +316,7 @@ def gerar_descricao_edicao(
         else:
             item_novo = novos_dict[item_id]
             produto = produtos_dict.get(item_original.produto_id)
-            produto_novo = produtos_dict.get(item_novo.produto_id)
             
-            alteracoes_item = []
             qtd_original = float(item_original.quantidade)
             qtd_nova = float(item_novo.quantidade)
             unit_original = float(item_original.valor_unitario)
@@ -310,47 +324,70 @@ def gerar_descricao_edicao(
             total_original = float(item_original.valor_total)
             total_novo = float(item_novo.valor_total)
             
+            alteracoes_item = []
             if qtd_original != qtd_nova:
-                alteracoes_item.append(f"quantidade: {qtd_original:.3f} → {qtd_nova:.3f}")
+                alteracoes_item.append(f"Quantidade: {qtd_original:.3f} → {qtd_nova:.3f}")
             if abs(unit_original - unit_novo) > 0.001:
-                alteracoes_item.append(f"valor unitário: {formatar_valor(unit_original)} → {formatar_valor(unit_novo)}")
+                alteracoes_item.append(f"Valor Unitário: {formatar_valor(unit_original)} → {formatar_valor(unit_novo)}")
             if abs(total_original - total_novo) > 0.001:
-                alteracoes_item.append(f"valor total: {formatar_valor(total_original)} → {formatar_valor(total_novo)}")
+                alteracoes_item.append(f"Valor Total: {formatar_valor(total_original)} → {formatar_valor(total_novo)}")
             
             if alteracoes_item:
                 descricao = produto.descricao if produto else f"Produto ID {item_original.produto_id}"
-                itens_alterados.append(f"  - {descricao}: {', '.join(alteracoes_item)}")
+                itens_alterados.append((descricao, alteracoes_item))
     
     if itens_adicionados:
-        linhas.append("Itens adicionados:")
+        linhas.extend([
+            "➕ ITENS ADICIONADOS",
+            linha("-"),
+        ])
         for item in itens_adicionados:
             produto = produtos_dict.get(item.produto_id)
             descricao = produto.descricao if produto else f"Produto ID {item.produto_id}"
             qtd = float(item.quantidade)
             unit = float(item.valor_unitario)
             total = float(item.valor_total)
-            linhas.append(
-                f"  - {descricao}: qtd {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}"
-            )
+            linhas.append(f"  • {descricao}")
+            linhas.append(f"      Qtd: {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}")
+        linhas.append("")
     
     if itens_removidos:
-        linhas.append("Itens removidos:")
+        linhas.extend([
+            "➖ ITENS REMOVIDOS",
+            linha("-"),
+        ])
         for item in itens_removidos:
             produto = produtos_dict.get(item.produto_id)
             descricao = produto.descricao if produto else f"Produto ID {item.produto_id}"
             qtd = float(item.quantidade)
             unit = float(item.valor_unitario)
             total = float(item.valor_total)
-            linhas.append(
-                f"  - {descricao}: qtd {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}"
-            )
+            linhas.append(f"  • {descricao}")
+            linhas.append(f"      Qtd: {qtd:.3f} x {formatar_valor(unit)} = {formatar_valor(total)}")
+        linhas.append("")
     
     if itens_alterados:
-        linhas.append("Itens alterados:")
-        linhas.extend(itens_alterados)
+        linhas.extend([
+            "✏️ ITENS ALTERADOS",
+            linha("-"),
+        ])
+        for descricao, alteracoes_item in itens_alterados:
+            linhas.append(f"  • {descricao}")
+            for alteracao in alteracoes_item:
+                linhas.append(f"      - {alteracao}")
+        linhas.append("")
     
     if not alteracoes_venda and not itens_adicionados and not itens_removidos and not itens_alterados:
-        linhas.append("Nenhuma alteração identificada nos dados da venda.")
+        linhas.extend([
+            "ℹ️ Nenhuma alteração identificada nos dados da venda.",
+            "",
+        ])
+    
+    linhas.extend([
+        linha("="),
+        f"  Valor Total Atualizado: {formatar_valor(venda_atualizada.valor_total)}",
+        linha("="),
+    ])
     
     return "\n".join(linhas)
 
