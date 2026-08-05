@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList, CircleDollarSign } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout, isAdmin } = useAuth();
@@ -14,7 +14,6 @@ export const DashboardPage: React.FC = () => {
     totalProdutos: 0,
     estoqueTotal: 0,
     ultimasVendas: 0,
-    valorVendas: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -29,13 +28,10 @@ export const DashboardPage: React.FC = () => {
       const vendas = (await apiClient.listarVendas(0, 1000)) as Venda[];
 
       const totalEstoque = produtos.reduce((acc, p) => acc + p.estoque_atual, 0);
-      const valorTotal = vendas.reduce((acc, v) => acc + v.valor_total, 0);
-
       setStats({
         totalProdutos: produtos.length,
         estoqueTotal: Math.round(totalEstoque * 100) / 100,
         ultimasVendas: vendas.length,
-        valorVendas: Math.round(valorTotal * 100) / 100,
       });
     } catch (error) {
       console.error('Erro ao carregar estatísticas:', error);
@@ -101,7 +97,7 @@ export const DashboardPage: React.FC = () => {
             <p className="text-gray-500">Carregando estatísticas...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             <StatCard
               icon={<Package />}
               label="Produtos no Estoque"
@@ -119,12 +115,6 @@ export const DashboardPage: React.FC = () => {
               label="Vendas Realizadas"
               value={stats.ultimasVendas}
               color="border-l-purple-500"
-            />
-            <StatCard
-              icon={<ShoppingCart />}
-              label="Valor Total de Vendas"
-              value={`R$ ${stats.valorVendas.toFixed(2)}`}
-              color="border-l-orange-500"
             />
           </div>
         )}
@@ -158,6 +148,13 @@ export const DashboardPage: React.FC = () => {
             icon={<BarChart3 className="w-8 h-8" />}
             onClick={() => navigate('/vendas')}
             color="bg-purple-50 hover:bg-purple-100"
+          />
+          <QuickAccessCard
+            title="Relatório de Vendas"
+            description="Faturamento e lucro por período"
+            icon={<CircleDollarSign className="w-8 h-8" />}
+            onClick={() => navigate('/relatorio-vendas')}
+            color="bg-cyan-50 hover:bg-cyan-100"
           />
           <QuickAccessCard
             title="Dados da Empresa"

@@ -15,6 +15,7 @@ import { PerdasPage } from './pages/PerdasPage';
 import { TrocarSenhaPage } from './pages/TrocarSenhaPage';
 import { UsuariosPage } from './pages/UsuariosPage';
 import { AuditoriaPage } from './pages/AuditoriaPage';
+import { RelatorioVendasPage } from './pages/RelatorioVendasPage';
 
 export const OrderFlowApp: React.FC = () => {
   return (
@@ -70,6 +71,14 @@ export const OrderFlowApp: React.FC = () => {
             element={
               <PrivateRoute>
                 <VendasPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/relatorio-vendas"
+            element={
+              <PrivateRoute>
+                <RelatorioVendasPage />
               </PrivateRoute>
             }
           />

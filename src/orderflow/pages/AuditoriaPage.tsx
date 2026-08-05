@@ -5,7 +5,19 @@ import { AuditLog } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Search, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Search, RefreshCw, Plus, Pencil, Trash2, XCircle, CheckCircle, LogIn, LogOut, Key, UserCog, FileText, AlertCircle } from 'lucide-react';
+
+const acaoConfig: Record<string, { icon: React.ReactNode; label: string; color: string; border: string }> = {
+  criar: { icon: <Plus className="w-3.5 h-3.5" />, label: 'Criar', color: 'bg-green-100 text-green-800 border-green-200', border: 'border-l-green-500' },
+  editar: { icon: <Pencil className="w-3.5 h-3.5" />, label: 'Editar', color: 'bg-blue-100 text-blue-800 border-blue-200', border: 'border-l-blue-500' },
+  excluir: { icon: <Trash2 className="w-3.5 h-3.5" />, label: 'Excluir', color: 'bg-red-100 text-red-800 border-red-200', border: 'border-l-red-500' },
+  cancelar: { icon: <XCircle className="w-3.5 h-3.5" />, label: 'Cancelar', color: 'bg-red-100 text-red-800 border-red-200', border: 'border-l-red-500' },
+  concluir: { icon: <CheckCircle className="w-3.5 h-3.5" />, label: 'Concluir', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', border: 'border-l-emerald-500' },
+  login: { icon: <LogIn className="w-3.5 h-3.5" />, label: 'Login', color: 'bg-purple-100 text-purple-800 border-purple-200', border: 'border-l-purple-500' },
+  logout: { icon: <LogOut className="w-3.5 h-3.5" />, label: 'Logout', color: 'bg-purple-100 text-purple-800 border-purple-200', border: 'border-l-purple-500' },
+  trocar_senha: { icon: <Key className="w-3.5 h-3.5" />, label: 'Trocar Senha', color: 'bg-yellow-100 text-yellow-800 border-yellow-200', border: 'border-l-yellow-500' },
+  resetar_senha: { icon: <Key className="w-3.5 h-3.5" />, label: 'Resetar Senha', color: 'bg-yellow-100 text-yellow-800 border-yellow-200', border: 'border-l-yellow-500' },
+};
 
 export const AuditoriaPage: React.FC = () => {
   const navigate = useNavigate();
@@ -77,25 +89,111 @@ export const AuditoriaPage: React.FC = () => {
     setTimeout(loadLogs, 0);
   };
 
-  const getAcaoColor = (acao: string) => {
-    switch (acao.toLowerCase()) {
-      case 'criar':
-        return 'bg-green-100 text-green-800';
-      case 'editar':
-        return 'bg-blue-100 text-blue-800';
-      case 'excluir':
-      case 'cancelar':
-      case 'desativar':
-        return 'bg-red-100 text-red-800';
-      case 'login':
-      case 'logout':
-        return 'bg-purple-100 text-purple-800';
-      case 'trocar_senha':
-      case 'resetar_senha':
-        return 'bg-yellow-100 text-yellow-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const getAcaoConfig = (acao: string) => {
+    return acaoConfig[acao.toLowerCase()] || {
+      icon: <FileText className="w-3.5 h-3.5" />,
+      label: acao,
+      color: 'bg-gray-100 text-gray-800 border-gray-200',
+      border: 'border-l-gray-500',
+    };
+  };
+
+  const formatarDataHora = (data: string) => {
+    return new Date(data).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
+  const renderizarDescricao = (log: AuditLog) => {
+    if (!log.descricao) return null;
+
+    // Se for edição de venda, renderizar com formatação especial
+    if (log.acao.toLowerCase() === 'editar' && log.entidade.toLowerCase() === 'venda') {
+      const linhas = log.descricao.split('\n');
+      return (
+        <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-4">
+          {linhas.map((linha, index) => {
+            const trimmed = linha.trim();
+            if (!trimmed) return null;
+
+            // Linhas de separação
+            if (trimmed.startsWith('=')) {
+              return <div key={index} className="my-2 border-t-2 border-slate-300" />;
+            }
+
+            // Título principal
+            if (trimmed.startsWith('EDIÇÃO DA VENDA')) {
+              return (
+                <h3 key={index} className="text-base font-bold text-slate-800 mb-2">
+                  {trimmed}
+                </h3>
+              );
+            }
+
+            // Seções
+            if (trimmed.startsWith('📋') || trimmed.startsWith('➕') || trimmed.startsWith('➖') || trimmed.startsWith('✏️')) {
+              return (
+                <h4 key={index} className="text-sm font-bold text-slate-700 mt-3 mb-2 uppercase tracking-wide">
+                  {trimmed}
+                </h4>
+              );
+            }
+
+            // Itens com bullet
+            if (trimmed.startsWith('•')) {
+              return (
+                <div key={index} className="ml-2 text-sm text-slate-800 font-medium mt-1">
+                  {trimmed}
+                </div>
+              );
+            }
+
+            // Subitens indentados
+            if (trimmed.startsWith('De:') || trimmed.startsWith('Para:') || trimmed.startsWith('-') || trimmed.startsWith('Qtd:')) {
+              return (
+                <div key={index} className="ml-6 text-sm text-slate-600">
+                  {trimmed.startsWith('De:') && <span className="text-red-600 font-medium">{trimmed}</span>}
+                  {trimmed.startsWith('Para:') && <span className="text-green-600 font-medium">{trimmed}</span>}
+                  {trimmed.startsWith('-') && <span>{trimmed}</span>}
+                  {trimmed.startsWith('Qtd:') && <span>{trimmed}</span>}
+                </div>
+              );
+            }
+
+            // Resumo final
+            if (trimmed.startsWith('Valor Total Atualizado')) {
+              return (
+                <div key={index} className="mt-3 text-sm font-bold text-slate-800 bg-blue-50 px-3 py-2 rounded inline-block">
+                  {trimmed}
+                </div>
+              );
+            }
+
+            return (
+              <div key={index} className="text-sm text-slate-600">
+                {trimmed}
+              </div>
+            );
+          })}
+        </div>
+      );
     }
+
+    // Para outros logs, manter texto simples mas formatar motivos
+    return (
+      <div className="mt-1 text-sm text-slate-700 leading-relaxed">
+        {log.descricao.split('\n').map((linha, index) => {
+          const trimmed = linha.trim();
+          if (!trimmed) return null;
+          return <p key={index}>{trimmed}</p>;
+        })}
+      </div>
+    );
   };
 
   return (
@@ -185,35 +283,51 @@ export const AuditoriaPage: React.FC = () => {
         ) : logs.length === 0 ? (
           <Card className="p-8 text-center text-gray-500">Nenhum log encontrado</Card>
         ) : (
-          <div className="space-y-3">
-            {logs.map((log) => (
-              <Card key={log.id} className="p-4">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getAcaoColor(log.acao)}`}>
-                          {log.acao}
+          <div className="space-y-4">
+            {logs.map((log) => {
+              const acaoCfg = getAcaoConfig(log.acao);
+              return (
+                <Card key={log.id} className={`p-0 overflow-hidden border-l-4 ${acaoCfg.border}`}>
+                  {/* Cabeçalho do log */}
+                  <div className="bg-slate-50 px-5 py-3 border-b border-slate-100">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${acaoCfg.color}`}>
+                          {acaoCfg.icon}
+                          {acaoCfg.label}
                         </span>
-                        <span className="text-sm text-gray-500">
-                          Entidade: <span className="font-medium">{log.entidade}</span>
-                          {log.entidade_id && ` #${log.entidade_id}`}
+                        <span className="text-sm text-slate-600">
+                          Entidade: <span className="font-semibold text-slate-800">{log.entidade}</span>
+                          {log.entidade_id && (
+                            <span className="ml-1 text-slate-500">#{log.entidade_id}</span>
+                          )}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-800">{log.descricao}</p>
-                      {log.descricao && log.descricao.includes('Motivo:') && (
-                        <p className="mt-1 text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded inline-block">
-                          {log.descricao.split('Motivo:')[1]?.trim()}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <div className="flex items-center gap-1">
+                          <UserCog className="w-3.5 h-3.5" />
+                          <span>{log.user_name || `ID ${log.user_id}`}</span>
+                        </div>
+                        {log.ip_address && (
+                          <div className="flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            <span>{log.ip_address}</span>
+                          </div>
+                        )}
+                        <div className="font-medium text-slate-700 bg-white px-2 py-1 rounded border border-slate-200">
+                          {formatarDataHora(log.created_at)}
+                        </div>
+                      </div>
                     </div>
-                  <div className="text-right text-xs text-gray-500 md:min-w-[200px]">
-                    <p>Usuário: {log.user_name || `ID ${log.user_id}`}</p>
-                    {log.ip_address && <p>IP: {log.ip_address}</p>}
-                    <p>{new Date(log.created_at).toLocaleString('pt-BR')}</p>
                   </div>
-                </div>
-              </Card>
-            ))}
+
+                  {/* Conteúdo do log */}
+                  <div className="px-5 py-4">
+                    {renderizarDescricao(log)}
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </main>
