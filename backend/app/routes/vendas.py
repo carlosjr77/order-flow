@@ -38,6 +38,7 @@ def listar_vendas(
     limit: int = 100,
     status_filter: str = None,
     include_deleted: bool = False,
+    include_item_costs: bool = False,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
@@ -52,17 +53,47 @@ def listar_vendas(
         query = query.filter(Venda.status == status_filter)
     
     vendas = query.offset(skip).limit(limit).all()
+
+    if not vendas:
+        return []
+
+    venda_ids = [venda.id for venda in vendas]
+
+    itens_query = db.query(ItemVenda).filter(ItemVenda.venda_id.in_(venda_ids))
+
+    # Buscar apenas itens não excluídos quando include_deleted=False
+    if not include_deleted:
+        itens_query = itens_query.filter(ItemVenda.deleted_at.is_(None))
+
+    itens = itens_query.all()
+
+    itens_por_venda: dict[int, list[dict]] = {}
+    produto_por_id: dict[int, Produto] = {}
+
+    if include_item_costs:
+        produto_ids = list({item.produto_id for item in itens})
+        if produto_ids:
+            produtos = db.query(Produto).filter(Produto.id.in_(produto_ids)).all()
+            produto_por_id = {produto.id: produto for produto in produtos}
+
+    for item in itens:
+        item_dict = {column.name: getattr(item, column.name) for column in item.__table__.columns}
+
+        if include_item_costs:
+            produto = produto_por_id.get(item.produto_id)
+            item_dict['codigo_interno'] = produto.codigo_interno if produto else str(item.produto_id)
+            item_dict['descricao'] = produto.descricao if produto else f'Produto {item.produto_id}'
+            item_dict['unidade_medida'] = produto.unidade_medida if produto else 'UN'
+            item_dict['ncm'] = produto.ncm if produto else None
+            item_dict['preco_custo'] = float(produto.preco_custo) if produto and produto.preco_custo else 0
+
+        itens_por_venda.setdefault(item.venda_id, []).append(item_dict)
     
     resultado = []
     for venda in vendas:
-        # Buscar apenas itens não excluídos
-        itens = db.query(ItemVenda).filter(
-            ItemVenda.venda_id == venda.id,
-            ItemVenda.deleted_at.is_(None)
-        ).all()
         resultado.append({
             **venda_to_dict(venda, db),
-            "itens": itens
+            "itens": itens_por_venda.get(venda.id, [])
         })
     
     return resultado

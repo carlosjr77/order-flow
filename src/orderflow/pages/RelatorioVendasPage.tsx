@@ -150,10 +150,10 @@ export const RelatorioVendasPage: React.FC = () => {
     try {
       setErro('');
       setIsLoading(true);
-      const data = (await apiClient.listarVendas(0, 2000)) as Venda[];
+      const data = (await apiClient.listarVendas(0, 2000, undefined, true, true)) as VendaDetalhada[];
       const ordenadas = data.sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime());
       setVendas(ordenadas);
-      await aplicarFiltros(
+      aplicarFiltros(
         ordenadas,
         inicioFiltro ?? dataInicio,
         fimFiltro ?? dataFim,
@@ -176,17 +176,8 @@ export const RelatorioVendasPage: React.FC = () => {
     }
   };
 
-  const carregarDetalhesVendas = async (vendasFiltradas: Venda[]) => {
-    const detalhes = (await Promise.all(
-      vendasFiltradas.map((venda) => apiClient.request(`/api/vendas/${venda.id}?include_deleted=true`, 'GET'))
-    )) as VendaDetalhada[];
-
-    detalhes.sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime());
-    setVendasDetalhadas(detalhes);
-  };
-
-  const aplicarFiltros = async (
-    base: Venda[] = vendas,
+  const aplicarFiltros = (
+    base: VendaDetalhada[] = vendas as VendaDetalhada[],
     inicio = dataInicio,
     fim = dataFim,
     status = statusFiltro,
@@ -208,23 +199,18 @@ export const RelatorioVendasPage: React.FC = () => {
     setErro('');
     setIsAplicandoFiltro(true);
 
-    try {
-      const vendasFiltradas = base.filter((venda) => {
-        const dataVenda = new Date(venda.data_venda);
-        const dataOk = dataVenda >= inicioPeriodo && dataVenda <= fimPeriodo;
-        const statusVenda = normalizarStatus(venda.status);
-        const statusOk = status === 'todos' ? true : statusVenda === status;
-        const operadorOk = operador === 'todos' ? true : (venda.usuario_nome || 'Não informado') === operador;
-        return dataOk && statusOk && operadorOk;
-      });
+    const vendasFiltradas = base.filter((venda) => {
+      const dataVenda = new Date(venda.data_venda);
+      const dataOk = dataVenda >= inicioPeriodo && dataVenda <= fimPeriodo;
+      const statusVenda = normalizarStatus(venda.status);
+      const statusOk = status === 'todos' ? true : statusVenda === status;
+      const operadorOk = operador === 'todos' ? true : (venda.usuario_nome || 'Não informado') === operador;
+      return dataOk && statusOk && operadorOk;
+    });
 
-      await carregarDetalhesVendas(vendasFiltradas);
-      setUltimoPeriodoAplicado({ inicio, fim, preset: presetPeriodo });
-    } catch (error: any) {
-      setErro(error?.message || 'Erro ao aplicar filtros do relatório');
-    } finally {
-      setIsAplicandoFiltro(false);
-    }
+    setVendasDetalhadas(vendasFiltradas);
+    setUltimoPeriodoAplicado({ inicio, fim, preset: presetPeriodo });
+    setIsAplicandoFiltro(false);
   };
 
   const dadosCalculados = useMemo(() => {

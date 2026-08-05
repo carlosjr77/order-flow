@@ -131,11 +131,19 @@ export class APIClient {
   }
 
   // Vendas endpoints
-  async listarVendas(skip = 0, limit = 100, status?: string) {
+  async listarVendas(
+    skip = 0,
+    limit = 100,
+    status?: string,
+    includeDeleted: boolean = false,
+    includeItemCosts: boolean = false
+  ) {
     const params = new URLSearchParams();
     params.append('skip', skip.toString());
     params.append('limit', limit.toString());
     if (status) params.append('status_filter', status);
+    if (includeDeleted) params.append('include_deleted', 'true');
+    if (includeItemCosts) params.append('include_item_costs', 'true');
     return this.request(`/api/vendas?${params}`, 'GET');
   }
 
