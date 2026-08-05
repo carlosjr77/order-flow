@@ -80,11 +80,28 @@ const endOfDay = (date: Date) => {
   return d;
 };
 
+const parseDateSeguro = (valor?: string) => {
+  if (!valor) return null;
+
+  // Evita problemas de fuso em datas no formato YYYY-MM-DD.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    const dataSomente = new Date(`${valor}T12:00:00`);
+    return Number.isNaN(dataSomente.getTime()) ? null : dataSomente;
+  }
+
+  const data = new Date(valor);
+  return Number.isNaN(data.getTime()) ? null : data;
+};
+
 const normalizarStatus = (status: string) => {
   if (!status) return '';
   const lower = status.toLowerCase();
   if (lower === 'concluido') return 'concluído';
   return lower;
+};
+
+const getDataReferenciaVenda = (venda: VendaDetalhada | Venda) => {
+  return parseDateSeguro(venda.data_entrega) || parseDateSeguro(venda.data_venda) || new Date(0);
 };
 
 export const RelatorioVendasPage: React.FC = () => {
@@ -151,7 +168,7 @@ export const RelatorioVendasPage: React.FC = () => {
       setErro('');
       setIsLoading(true);
       const data = (await apiClient.listarVendas(0, 2000, undefined, true, true)) as VendaDetalhada[];
-      const ordenadas = data.sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime());
+      const ordenadas = data.sort((a, b) => getDataReferenciaVenda(b).getTime() - getDataReferenciaVenda(a).getTime());
       setVendas(ordenadas);
       aplicarFiltros(
         ordenadas,
@@ -200,8 +217,8 @@ export const RelatorioVendasPage: React.FC = () => {
     setIsAplicandoFiltro(true);
 
     const vendasFiltradas = base.filter((venda) => {
-      const dataVenda = new Date(venda.data_venda);
-      const dataOk = dataVenda >= inicioPeriodo && dataVenda <= fimPeriodo;
+      const dataReferencia = getDataReferenciaVenda(venda);
+      const dataOk = dataReferencia >= inicioPeriodo && dataReferencia <= fimPeriodo;
       const statusVenda = normalizarStatus(venda.status);
       const statusOk = status === 'todos' ? true : statusVenda === status;
       const operadorOk = operador === 'todos' ? true : (venda.usuario_nome || 'Não informado') === operador;
@@ -311,7 +328,7 @@ export const RelatorioVendasPage: React.FC = () => {
 
     const serieDiariaAgg = vendasConsideradas.reduce(
       (acc, venda) => {
-        const data = new Date(venda.data_venda);
+        const data = getDataReferenciaVenda(venda);
         const key = toInputDate(data);
         if (!acc[key]) {
           acc[key] = { data: key, faturamento: 0, lucro: 0, vendas: 0 };
@@ -419,6 +436,9 @@ export const RelatorioVendasPage: React.FC = () => {
               Período aplicado: {ultimoPeriodoAplicado.inicio || '-'} até {ultimoPeriodoAplicado.fim || '-'}
             </p>
           </div>
+          <p className="text-xs text-slate-600 mb-3">
+            Regra de data: usa <span className="font-semibold">data de entrega</span> quando existir; caso contrário, usa a data de venda.
+          </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-end">
             <div className="lg:col-span-4">
