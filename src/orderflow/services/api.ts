@@ -296,6 +296,57 @@ export class APIClient {
   async estatisticasAuditoria() {
     return this.request('/api/audit/estatisticas', 'GET');
   }
+
+  // Tabelas de Preço endpoints
+  async listarTabelasPreco(skip = 0, limit = 100, apenasAtivas = false, busca?: string) {
+    const params = new URLSearchParams();
+    params.append('skip', skip.toString());
+    params.append('limit', limit.toString());
+    if (apenasAtivas) params.append('apenas_ativas', 'true');
+    if (busca) params.append('busca', busca);
+    return this.request(`/api/tabelas-preco?${params}`, 'GET');
+  }
+
+  async obterTabelaPreco(id: number) {
+    return this.request(`/api/tabelas-preco/${id}`, 'GET');
+  }
+
+  async criarTabelaPreco(data: any) {
+    return this.request('/api/tabelas-preco', 'POST', data);
+  }
+
+  async atualizarTabelaPreco(id: number, data: any) {
+    return this.request(`/api/tabelas-preco/${id}`, 'PUT', data);
+  }
+
+  async deletarTabelaPreco(id: number) {
+    return this.request(`/api/tabelas-preco/${id}`, 'DELETE');
+  }
+
+  async sugerirTabelaPreco(formData: FormData) {
+    const url = `${this.baseURL}/api/tabelas-preco/sugestao`;
+    const headers: HeadersInit = {};
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        this.clearToken();
+        window.location.href = '/login';
+      }
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(errorText || `API Error ${response.status}`);
+    }
+
+    return response.json();
+  }
 }
 
 export const apiClient = new APIClient();

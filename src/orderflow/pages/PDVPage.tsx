@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { Produto, ItemCarrinho, Venda, DadosEmpresa, Cliente } from '../types';
+import { Produto, ItemCarrinho, Venda, DadosEmpresa, Cliente, TabelaPreco } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle, X, Save } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Download, Printer, User, MapPin, AlertCircle, X, Save, Wand2 } from 'lucide-react';
 import { gerarComprovanteDANFE } from '../utils/gerarComprovante';
 import { useDebounce } from '../hooks/useDebounce';
 import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 import { calcularPrecoVenda } from '../utils/precoDinamico';
+import { SugestaoTabelaModal } from '../components/SugestaoTabelaModal';
 
 type ModoPrecoPersonalizado = 'padrao' | 'preco' | 'margem';
 
@@ -57,6 +58,12 @@ export const PDVPage: React.FC = () => {
     documento: '',
   });
 
+  // Tabela de Preços selecionada para a venda
+  const [tabelasPreco, setTabelasPreco] = useState<TabelaPreco[]>([]);
+  const [tabelaPrecoSelecionadaId, setTabelaPrecoSelecionadaId] = useState<number | null>(null);
+  const tabelaPrecoSelecionada = tabelasPreco.find((t) => t.id === tabelaPrecoSelecionadaId) || null;
+  const [showModalSugestaoTabela, setShowModalSugestaoTabela] = useState(false);
+
   // Dados de entrega
   const [showEnderecoEntrega, setShowEnderecoEntrega] = useState(false);
   const [editandoEndereco, setEditandoEndereco] = useState(false);
@@ -88,6 +95,7 @@ export const PDVPage: React.FC = () => {
 
   useEffect(() => {
     loadEmpresaDados();
+    loadTabelasPreco();
   }, []);
 
   // Carregar venda para edição quando estiver em modo de edição
@@ -116,6 +124,9 @@ export const PDVPage: React.FC = () => {
         setShowDadosCliente(true);
       }
 
+      // Preencher tabela de preços utilizada na venda
+      setTabelaPrecoSelecionadaId(venda.tabela_preco_id ?? null);
+
       // Preencher forma de pagamento
       setFormaPagamento(venda.forma_pagamento || '');
 
@@ -137,7 +148,7 @@ export const PDVPage: React.FC = () => {
       // Preencher carrinho com itens da venda
       const itensCarrinho: ItemCarrinhoPDV[] = venda.itens.map((item, index) => {
         const produto = produtos.find((p) => p.id === item.produto_id);
-        const precoBase = produto ? getPrecoVenda(produto) : item.valor_unitario;
+        const precoBase = produto ? getPrecoVendaFinal(produto) : item.valor_unitario;
         const precoCusto = produto ? produto.preco_custo : 0;
 
         return {
@@ -175,7 +186,7 @@ export const PDVPage: React.FC = () => {
     return empresaDados?.margem_lucro_padrao ?? 1.0;
   };
 
-  // Calcular preço de venda de um produto usando a hierarquia
+  // Calcular preço de venda de um produto usando a hierarquia padrão do sistema
   const getPrecoVenda = (produto: Produto): number => {
     return calcularPrecoVenda(
       produto.preco_custo,
@@ -184,6 +195,54 @@ export const PDVPage: React.FC = () => {
       getMargemGeral()
     );
   };
+
+  // Calcular preço de venda considerando a Tabela de Preços selecionada na venda
+  // 1) Exceção por produto na tabela -> 2) Margem geral da tabela -> 3) Regra padrão do sistema
+  const getPrecoVendaFinal = (produto: Produto): number => {
+    if (tabelaPrecoSelecionada) {
+      const excecao = tabelaPrecoSelecionada.itens.find((item) => item.produto_id === produto.id);
+      if (excecao) {
+        return Number((produto.preco_custo * (1 + excecao.margem_especifica_percentual / 100)).toFixed(2));
+      }
+      return Number(
+        (produto.preco_custo * (1 + tabelaPrecoSelecionada.margem_geral_percentual / 100)).toFixed(2)
+      );
+    }
+    return getPrecoVenda(produto);
+  };
+
+  const loadTabelasPreco = async () => {
+    try {
+      const data = await apiClient.listarTabelasPreco(0, 200, true) as TabelaPreco[];
+      setTabelasPreco(data);
+    } catch (error) {
+      console.error('Erro ao carregar tabelas de preço:', error);
+    }
+  };
+
+  // Recalcula os preços dos itens já inseridos no carrinho ao trocar a tabela de preços
+  useEffect(() => {
+    setCarrinho((itens) =>
+      itens.map((item) => {
+        const produto = produtos.find((p) => p.id === item.produto_id);
+        if (!produto) return item;
+
+        const novoPrecoBase = getPrecoVendaFinal(produto);
+
+        if (item.modo_preco_personalizado === 'padrao') {
+          return {
+            ...item,
+            preco_base: novoPrecoBase,
+            valor_unitario: novoPrecoBase,
+            valor_total: item.quantidade * novoPrecoBase,
+          };
+        }
+
+        return { ...item, preco_base: novoPrecoBase };
+      })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabelaPrecoSelecionadaId, tabelasPreco, produtos]);
 
   const loadEmpresaDados = async () => {
     try {
@@ -258,7 +317,7 @@ export const PDVPage: React.FC = () => {
   }, [buscaDebounced]);
 
   const adicionarAoCarrinho = (produto: Produto) => {
-    const precoVenda = getPrecoVenda(produto);
+    const precoVenda = getPrecoVendaFinal(produto);
     const itemExistente = carrinho.find((item) => item.produto_id === produto.id);
 
     if (itemExistente) {
@@ -538,6 +597,7 @@ export const PDVPage: React.FC = () => {
           observacoes: observacoes || null,
           valor_frete: valorFreteNum,
           nome_cliente: nomeCliente,
+          tabela_preco_id: tabelaPrecoSelecionadaId,
           data_entrega: dataEntrega ? dataEntrega : null,
           data_vencimento: dataVencimento ? dataVencimento : null,
           status: concluirAoSalvar ? 'concluído' : undefined,
@@ -550,6 +610,7 @@ export const PDVPage: React.FC = () => {
           observacoes: observacoes || null,
           valor_frete: valorFreteNum,
           nome_cliente: nomeCliente,
+          tabela_preco_id: tabelaPrecoSelecionadaId,
           data_entrega: dataEntrega ? dataEntrega : null,
           data_vencimento: dataVencimento ? dataVencimento : null,
         }) as Venda;
@@ -605,6 +666,7 @@ export const PDVPage: React.FC = () => {
       setClienteSelecionado(null);
       setBuscaCliente('');
       setDadosCliente({ nome: '', documento: '' });
+      setTabelaPrecoSelecionadaId(null);
       setEnderecoEntrega({
         endereco: '',
         numero: '',
@@ -738,7 +800,7 @@ export const PDVPage: React.FC = () => {
                 <p className="text-gray-500">Nenhum produto encontrado</p>
               ) : (
                 produtos.map((produto) => {
-                  const precoVenda = getPrecoVenda(produto);
+                  const precoVenda = getPrecoVendaFinal(produto);
                   return (
                     <Card
                       key={produto.id}
@@ -772,6 +834,43 @@ export const PDVPage: React.FC = () => {
             <Card className="h-full min-h-0 overflow-hidden">
               <div className="h-full min-h-0 overflow-y-auto p-6">
                 <h2 className="text-lg font-bold mb-4">Carrinho</h2>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tabela de Preços
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={tabelaPrecoSelecionadaId ?? ''}
+                      onChange={(e) =>
+                        setTabelaPrecoSelecionadaId(e.target.value ? parseInt(e.target.value, 10) : null)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded"
+                    >
+                      <option value="">Nenhuma (Usar Preço Padrão do Sistema)</option>
+                      {tabelasPreco.map((tabela) => (
+                        <option key={tabela.id} value={tabela.id}>
+                          {tabela.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowModalSugestaoTabela(true)}
+                      className="whitespace-nowrap border-purple-300 text-purple-700 hover:bg-purple-50"
+                    >
+                      <Wand2 className="w-4 h-4 mr-1" />
+                      Sugerir Tabela
+                    </Button>
+                  </div>
+                  {tabelaPrecoSelecionada && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Margem geral da tabela: {Number(tabelaPrecoSelecionada.margem_geral_percentual).toFixed(2)}%
+                    </p>
+                  )}
+                </div>
 
                 {carrinho.length === 0 ? (
                   <p className="text-gray-500 text-center py-8">
@@ -1418,6 +1517,18 @@ export const PDVPage: React.FC = () => {
             </Button>
           </Card>
         </div>
+      )}
+
+      {/* Modal Assistente de Sugestão de Tabela de Preço */}
+      {showModalSugestaoTabela && (
+        <SugestaoTabelaModal
+          tabelasPreco={tabelasPreco}
+          onClose={() => setShowModalSugestaoTabela(false)}
+          onAplicar={(tabelaId) => {
+            setTabelaPrecoSelecionadaId(tabelaId);
+            setShowModalSugestaoTabela(false);
+          }}
+        />
       )}
     </div>
   );

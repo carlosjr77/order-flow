@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList, CircleDollarSign } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList, CircleDollarSign, Tag } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout, isAdmin } = useAuth();
@@ -155,6 +155,13 @@ export const DashboardPage: React.FC = () => {
             icon={<CircleDollarSign className="w-8 h-8" />}
             onClick={() => navigate('/relatorio-vendas')}
             color="bg-cyan-50 hover:bg-cyan-100"
+          />
+          <QuickAccessCard
+            title="Tabelas de Preço"
+            description="Gerenciar margens e exceções por produto"
+            icon={<Tag className="w-8 h-8" />}
+            onClick={() => navigate('/tabelas-preco')}
+            color="bg-orange-50 hover:bg-orange-100"
           />
           <QuickAccessCard
             title="Dados da Empresa"

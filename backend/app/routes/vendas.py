@@ -176,6 +176,7 @@ def criar_venda(
         observacoes=venda_data.observacoes,
         valor_frete=valor_frete,
         nome_cliente=venda_data.nome_cliente,
+        tabela_preco_id=venda_data.tabela_preco_id,
         data_entrega=venda_data.data_entrega if venda_data.data_entrega else None,
         data_vencimento=venda_data.data_vencimento if venda_data.data_vencimento else None
     )
@@ -539,6 +540,7 @@ def editar_venda(
     venda.observacoes = venda_data.observacoes
     venda.valor_frete = valor_frete
     venda.nome_cliente = venda_data.nome_cliente
+    venda.tabela_preco_id = venda_data.tabela_preco_id
     venda.data_entrega = venda_data.data_entrega if venda_data.data_entrega else None
     venda.data_vencimento = venda_data.data_vencimento if venda_data.data_vencimento else None
     venda.valor_total = valor_total_itens + valor_frete

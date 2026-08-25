@@ -9,6 +9,7 @@ class Venda(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True, index=True)  # Usuário que registrou a venda
+    tabela_preco_id = Column(Integer, ForeignKey("tabelas_preco.id"), nullable=True, index=True)  # Tabela de preços usada na venda
     data_venda = Column(DateTime, server_default=func.now(), index=True, default=func.now())
     data_entrega = Column(Date, nullable=True)  # Data de entrega (pode ser passado ou futuro)
     data_vencimento = Column(Date, nullable=True)  # Data de vencimento do pedido (opcional)

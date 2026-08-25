@@ -5,7 +5,7 @@ import uvicorn
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit
+from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -194,6 +194,21 @@ def run_migrations():
                 print("✅ Migração: coluna 'motivo_cancelamento' adicionada em 'vendas'")
             else:
                 print("✅ Migração: coluna 'motivo_cancelamento' já existe em 'vendas'")
+
+            # Adicionar coluna tabela_preco_id em vendas se não existir (tabelas_preco já criada pelo create_all)
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'vendas' AND column_name = 'tabela_preco_id'"
+            )).fetchone()
+
+            if result[0] == 0:
+                conn.execute(text(
+                    "ALTER TABLE vendas ADD COLUMN tabela_preco_id INTEGER REFERENCES tabelas_preco(id)"
+                ))
+                conn.commit()
+                print("✅ Migração: coluna 'tabela_preco_id' adicionada em 'vendas'")
+            else:
+                print("✅ Migração: coluna 'tabela_preco_id' já existe em 'vendas'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 
@@ -262,6 +277,7 @@ app.include_router(empresas.router)
 app.include_router(clientes.router)
 app.include_router(usuarios.router)
 app.include_router(audit.router)
+app.include_router(tabelas_preco.router)
 
 
 @app.get("/")

@@ -16,6 +16,7 @@ import { TrocarSenhaPage } from './pages/TrocarSenhaPage';
 import { UsuariosPage } from './pages/UsuariosPage';
 import { AuditoriaPage } from './pages/AuditoriaPage';
 import { RelatorioVendasPage } from './pages/RelatorioVendasPage';
+import { TabelasPrecoPage } from './pages/TabelasPrecoPage';
 
 export const OrderFlowApp: React.FC = () => {
   return (
@@ -87,6 +88,14 @@ export const OrderFlowApp: React.FC = () => {
             element={
               <PrivateRoute>
                 <EmpresaPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/tabelas-preco"
+            element={
+              <PrivateRoute>
+                <TabelasPrecoPage />
               </PrivateRoute>
             }
           />

@@ -70,6 +70,7 @@ export interface Venda {
   forma_pagamento?: string;
   observacoes?: string;
   nome_cliente?: string;
+  tabela_preco_id?: number | null;
   motivo_cancelamento?: string;
   itens?: ItemVenda[];
   created_at: string;
@@ -147,4 +148,54 @@ export interface AtualizarUsuarioData {
 export interface TrocaSenhaData {
   senha_atual: string;
   nova_senha: string;
+}
+
+export interface TabelaPrecoItem {
+  id: number;
+  tabela_preco_id: number;
+  produto_id: number;
+  margem_especifica_percentual: number;
+  preco_calculado?: number | null;
+  codigo_interno?: string | null;
+  descricao?: string | null;
+  preco_custo?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TabelaPreco {
+  id: number;
+  nome: string;
+  descricao?: string | null;
+  margem_geral_percentual: number;
+  ativa: boolean;
+  itens: TabelaPrecoItem[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ItemComparativoSugestao {
+  item_reconhecido: string;
+  quantidade: number;
+  unidade: string;
+  preco_nota: number;
+  produto_id?: number | null;
+  produto_descricao?: string | null;
+  precos_por_tabela: Record<string, number | null>;
+  diferenca_valor?: number | null;
+  diferenca_percentual?: number | null;
+}
+
+export interface TabelaAnalisadaSugestao {
+  id: number;
+  nome: string;
+  erro_percentual?: number | null;
+  itens_comparados: number;
+}
+
+export interface SugestaoTabelaResponse {
+  tabela_sugerida: { id: number; nome: string };
+  motivo: string;
+  tabelas_analisadas: TabelaAnalisadaSugestao[];
+  comparativo: ItemComparativoSugestao[];
 }

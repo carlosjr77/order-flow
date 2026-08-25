@@ -122,6 +122,7 @@ class VendaBase(BaseModel):
     forma_pagamento: Optional[str] = None
     observacoes: Optional[str] = None
     nome_cliente: Optional[str] = None
+    tabela_preco_id: Optional[int] = None  # Tabela de preços usada na venda
     data_entrega: Optional[date] = None  # Data de entrega
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
 
@@ -132,6 +133,7 @@ class VendaCreate(BaseModel):
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
+    tabela_preco_id: Optional[int] = None  # Tabela de preços usada na venda
     data_entrega: Optional[date] = None  # Data de entrega
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
 
@@ -142,6 +144,7 @@ class VendaUpdate(BaseModel):
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
+    tabela_preco_id: Optional[int] = None  # Tabela de preços usada na venda
     data_entrega: Optional[date] = None  # Data de entrega
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
     status: Optional[str] = None  # Permite alterar status ao concluir edição
@@ -256,6 +259,89 @@ class ClienteResponse(ClienteBase):
     
     class Config:
         from_attributes = True
+
+
+class TabelaPrecoItemBase(BaseModel):
+    produto_id: int
+    margem_especifica_percentual: float
+
+
+class TabelaPrecoItemCreate(TabelaPrecoItemBase):
+    pass
+
+
+class TabelaPrecoItemResponse(TabelaPrecoItemBase):
+    id: int
+    tabela_preco_id: int
+    preco_calculado: Optional[float] = None
+    codigo_interno: Optional[str] = None
+    descricao: Optional[str] = None
+    preco_custo: Optional[float] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TabelaPrecoBase(BaseModel):
+    nome: str
+    descricao: Optional[str] = None
+    margem_geral_percentual: float = 0
+    ativa: bool = True
+
+
+class TabelaPrecoCreate(TabelaPrecoBase):
+    itens: list[TabelaPrecoItemCreate] = []
+
+
+class TabelaPrecoUpdate(BaseModel):
+    nome: Optional[str] = None
+    descricao: Optional[str] = None
+    margem_geral_percentual: Optional[float] = None
+    ativa: Optional[bool] = None
+    itens: Optional[list[TabelaPrecoItemCreate]] = None
+
+
+class TabelaPrecoResponse(TabelaPrecoBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    itens: list[TabelaPrecoItemResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class ItemComparativoSugestao(BaseModel):
+    item_reconhecido: str
+    quantidade: float
+    unidade: str
+    preco_nota: float
+    produto_id: Optional[int] = None
+    produto_descricao: Optional[str] = None
+    precos_por_tabela: dict[str, Optional[float]]
+    diferenca_valor: Optional[float] = None
+    diferenca_percentual: Optional[float] = None
+
+
+class TabelaAnalisadaSugestao(BaseModel):
+    id: int
+    nome: str
+    erro_percentual: Optional[float] = None
+    itens_comparados: int
+
+
+class TabelaSugeridaInfo(BaseModel):
+    id: int
+    nome: str
+
+
+class SugestaoTabelaResponse(BaseModel):
+    tabela_sugerida: TabelaSugeridaInfo
+    motivo: str
+    tabelas_analisadas: list[TabelaAnalisadaSugestao]
+    comparativo: list[ItemComparativoSugestao]
 
 
 class AuditLogResponse(BaseModel):
