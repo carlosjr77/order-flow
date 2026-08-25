@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { apiClient } from '../services/api';
-import { SugestaoTabelaResponse, TabelaPreco } from '../types';
+import { SugestaoTabelaResponse, TabelaPreco, Produto } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Wand2, Upload, X, AlertCircle, CheckCircle2, FileText } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Wand2, Upload, X, AlertCircle, AlertTriangle, CheckCircle2, FileText, Search } from 'lucide-react';
 
 interface SugestaoTabelaModalProps {
   tabelasPreco: TabelaPreco[];
@@ -25,6 +26,11 @@ export const SugestaoTabelaModal: React.FC<SugestaoTabelaModalProps> = ({
   const [erro, setErro] = useState('');
   const [resultado, setResultado] = useState<SugestaoTabelaResponse | null>(null);
 
+  // Correção manual de itens não localizados
+  const [produtosDisponiveis, setProdutosDisponiveis] = useState<Produto[]>([]);
+  const [linhaEmCorrecao, setLinhaEmCorrecao] = useState<number | null>(null);
+  const [buscaProdutoManual, setBuscaProdutoManual] = useState('');
+
   const handleAnalisar = async () => {
     if (!arquivo && !textoColado.trim()) {
       setErro('Envie um arquivo ou cole o texto do pedido/nota para análise.');
@@ -42,6 +48,8 @@ export const SugestaoTabelaModal: React.FC<SugestaoTabelaModalProps> = ({
 
       const data = (await apiClient.sugerirTabelaPreco(formData)) as SugestaoTabelaResponse;
       setResultado(data);
+      const produtos = (await apiClient.listarProdutos(0, 1000)) as Produto[];
+      setProdutosDisponiveis(produtos);
     } catch (error: any) {
       let mensagem = 'Erro ao analisar o conteúdo enviado.';
       if (error?.message) {
@@ -63,6 +71,56 @@ export const SugestaoTabelaModal: React.FC<SugestaoTabelaModalProps> = ({
       onAplicar(resultado.tabela_sugerida.id);
     }
   };
+
+  const calcularPrecoNaTabela = (produto: Produto, tabelaId: number): number | null => {
+    const tabela = tabelasPreco.find((t) => t.id === tabelaId);
+    if (!tabela) return null;
+    const excecao = tabela.itens.find((i) => i.produto_id === produto.id);
+    const margem = excecao ? excecao.margem_especifica_percentual : tabela.margem_geral_percentual;
+    return Number((produto.preco_custo * (1 + margem / 100)).toFixed(2));
+  };
+
+  const selecionarProdutoManualmente = (index: number, produto: Produto) => {
+    if (!resultado) return;
+
+    const precosPorTabela: Record<string, number | null> = {};
+    resultado.tabelas_analisadas.forEach((tabela) => {
+      precosPorTabela[String(tabela.id)] = calcularPrecoNaTabela(produto, tabela.id);
+    });
+
+    const precoSugerido = precosPorTabela[String(resultado.tabela_sugerida.id)];
+    const precoNota = resultado.comparativo[index].preco_nota;
+    const diferencaValor = precoSugerido !== null && precoSugerido !== undefined ? Number((precoSugerido - precoNota).toFixed(2)) : null;
+    const diferencaPercentual = diferencaValor !== null && precoNota ? Number(((diferencaValor / precoNota) * 100).toFixed(2)) : null;
+
+    setResultado({
+      ...resultado,
+      comparativo: resultado.comparativo.map((item, i) =>
+        i === index
+          ? {
+              ...item,
+              produto_id: produto.id,
+              produto_descricao: produto.descricao,
+              precos_por_tabela: precosPorTabela,
+              diferenca_valor: diferencaValor,
+              diferenca_percentual: diferencaPercentual,
+              aviso_unidade: null,
+            }
+          : item
+      ),
+    });
+    setLinhaEmCorrecao(null);
+    setBuscaProdutoManual('');
+  };
+
+  const produtosFiltradosParaCorrecao = produtosDisponiveis.filter((produto) => {
+    if (!buscaProdutoManual.trim()) return true;
+    const termo = buscaProdutoManual.toLowerCase();
+    return (
+      produto.descricao.toLowerCase().includes(termo) ||
+      produto.codigo_interno.toLowerCase().includes(termo)
+    );
+  });
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -157,6 +215,7 @@ export const SugestaoTabelaModal: React.FC<SugestaoTabelaModalProps> = ({
                   <thead className="bg-gray-50 border-b">
                     <tr>
                       <th className="px-3 py-2 text-left font-medium text-gray-700">Item Reconhecido</th>
+                      <th className="px-3 py-2 text-center font-medium text-gray-700">Unidade</th>
                       <th className="px-3 py-2 text-right font-medium text-gray-700">Preço na Nota</th>
                       {resultado.tabelas_analisadas.map((tabela) => (
                         <th key={tabela.id} className="px-3 py-2 text-right font-medium text-gray-700">
@@ -169,15 +228,86 @@ export const SugestaoTabelaModal: React.FC<SugestaoTabelaModalProps> = ({
                   </thead>
                   <tbody className="divide-y">
                     {resultado.comparativo.map((item, index) => (
-                      <tr key={index} className={!item.produto_id ? 'bg-amber-50' : undefined}>
+                      <tr
+                        key={index}
+                        className={item.aviso_unidade ? 'bg-red-50' : !item.produto_id ? 'bg-red-50' : undefined}
+                      >
                         <td className="px-3 py-2">
                           <p className="font-medium text-gray-900">{item.item_reconhecido}</p>
-                          <p className="text-xs text-gray-500">
-                            {item.produto_descricao
-                              ? `→ ${item.produto_descricao}`
-                              : 'Produto não encontrado no catálogo'}
-                          </p>
+                          {item.aviso_unidade ? (
+                            <p className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
+                              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                              {item.aviso_unidade}
+                            </p>
+                          ) : item.produto_descricao ? (
+                            <p className="text-xs text-gray-500">→ {item.produto_descricao}</p>
+                          ) : (
+                            <p className="text-xs text-red-600 flex items-center gap-1 mt-0.5">
+                              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                              Item não localizado no cadastro
+                            </p>
+                          )}
+
+                          {!item.produto_id && (
+                            <div className="mt-1">
+                              {linhaEmCorrecao === index ? (
+                                <div className="border border-gray-200 rounded bg-white shadow-sm p-2 w-64">
+                                  <div className="relative mb-2">
+                                    <Search className="absolute left-2 top-2 w-3 h-3 text-gray-400" />
+                                    <Input
+                                      autoFocus
+                                      value={buscaProdutoManual}
+                                      onChange={(e) => setBuscaProdutoManual(e.target.value)}
+                                      placeholder="Buscar produto..."
+                                      className="h-7 pl-6 text-xs"
+                                    />
+                                  </div>
+                                  <div className="max-h-32 overflow-y-auto">
+                                    {produtosFiltradosParaCorrecao.length === 0 ? (
+                                      <p className="text-xs text-gray-500 p-1">Nenhum produto encontrado</p>
+                                    ) : (
+                                      produtosFiltradosParaCorrecao.slice(0, 20).map((produto) => (
+                                        <button
+                                          key={produto.id}
+                                          type="button"
+                                          onClick={() => selecionarProdutoManualmente(index, produto)}
+                                          className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 rounded"
+                                        >
+                                          {produto.descricao}{' '}
+                                          <span className="text-gray-400">
+                                            ({produto.codigo_interno} • {produto.unidade_medida})
+                                          </span>
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setLinhaEmCorrecao(null);
+                                      setBuscaProdutoManual('');
+                                    }}
+                                    className="text-xs text-gray-500 mt-1"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLinhaEmCorrecao(index);
+                                    setBuscaProdutoManual('');
+                                  }}
+                                  className="text-xs text-blue-600 underline"
+                                >
+                                  Selecionar produto manualmente
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
+                        <td className="px-3 py-2 text-center text-gray-700">{item.unidade}</td>
                         <td className="px-3 py-2 text-right text-gray-700">
                           R$ {item.preco_nota.toFixed(2)}
                         </td>

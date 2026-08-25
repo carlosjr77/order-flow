@@ -184,6 +184,7 @@ export interface ItemComparativoSugestao {
   precos_por_tabela: Record<string, number | null>;
   diferenca_valor?: number | null;
   diferenca_percentual?: number | null;
+  aviso_unidade?: string | null;
 }
 
 export interface TabelaAnalisadaSugestao {

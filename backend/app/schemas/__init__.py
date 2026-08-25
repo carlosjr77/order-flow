@@ -323,6 +323,7 @@ class ItemComparativoSugestao(BaseModel):
     precos_por_tabela: dict[str, Optional[float]]
     diferenca_valor: Optional[float] = None
     diferenca_percentual: Optional[float] = None
+    aviso_unidade: Optional[str] = None
 
 
 class TabelaAnalisadaSugestao(BaseModel):

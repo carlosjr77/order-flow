@@ -3,7 +3,14 @@
 Fluxo:
 1. Extrai texto de um arquivo (PDF/imagem, via OCR) e/ou de texto colado pelo usuário.
 2. Faz parsing heurístico do texto para extrair itens (nome, quantidade, unidade, preço unitário).
-3. Faz fuzzy matching de cada item extraído com os produtos cadastrados.
+3. Faz fuzzy matching de cada item extraído com os produtos cadastrados, exigindo que a unidade
+   de medida (KG, CX, UN, PCT, LT, ...) seja compatível - é proibido vincular um preço cotado em
+   KG a um produto cadastrado em CX (e vice-versa). Itens com unidade divergente ficam sem preço
+   calculado e recebem um aviso, sendo excluídos da métrica de comparação entre tabelas. O matching
+   exige um score mínimo de confiança (0.80) e aplica duas barreiras semânticas: (a) categoria de
+   hortifrúti incompatível (fruta x legume/verdura) nunca é associada; (b) a palavra-chave/raiz
+   principal do item da nota precisa aparecer no nome do produto do sistema (ex: "Milho" não pode
+   casar com "Pimentão" só por semelhança genérica). Abaixo do limiar, o item fica sem produto.
 4. Simula o preço de cada item em cada Tabela de Preço ativa (exceção do produto > margem geral).
 5. Escolhe a tabela com menor variação percentual média (MAPE) em relação aos preços da nota.
 """
@@ -20,15 +27,65 @@ from sqlalchemy.orm import Session
 from app.models import Produto, TabelaPreco, TabelaPrecoItem
 
 _REGEX_PRECO = re.compile(r'(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2}|\d+,\d{2})', re.IGNORECASE)
-_REGEX_QUANTIDADE = re.compile(
-    r'^\s*(\d+(?:[.,]\d+)?)\s*(kg|g|l|lt|un|und|unidade|unidades|cx|caixa|pct|pacote)?s?\.?\s*x?\s*',
+
+# Mapeia todas as variações de escrita para a unidade canônica usada no cadastro de produtos
+_UNIDADES_ALIASES = {
+    'kg': 'KG', 'kgs': 'KG', 'k': 'KG', 'kilo': 'KG', 'kilos': 'KG', 'quilo': 'KG', 'quilos': 'KG',
+    'g': 'G', 'grama': 'G', 'gramas': 'G',
+    'cx': 'CX', 'caixa': 'CX', 'caixas': 'CX',
+    'un': 'UN', 'und': 'UN', 'unid': 'UN', 'unidade': 'UN', 'unidades': 'UN',
+    'bj': 'UN', 'bandeja': 'UN', 'bandejas': 'UN', 'saco': 'UN', 'sacos': 'UN',
+    'pct': 'PCT', 'pacote': 'PCT', 'pacotes': 'PCT',
+    'lt': 'LT', 'l': 'LT', 'litro': 'LT', 'litros': 'LT',
+}
+# Ordenado por tamanho decrescente para casar termos compostos (ex: "kilo") antes de abreviações ("k")
+_UNIDADE_TOKENS_ORDENADOS = sorted(_UNIDADES_ALIASES.keys(), key=len, reverse=True)
+_ALTERNATIVAS_UNIDADE = '|'.join(_UNIDADE_TOKENS_ORDENADOS)
+
+_REGEX_QTD_UNIDADE_INLINE = re.compile(
+    r'(\d+(?:[.,]\d+)?)\s*(' + _ALTERNATIVAS_UNIDADE + r')\b\.?',
     re.IGNORECASE
 )
+_REGEX_UNIDADE_GERAL = re.compile(r'\b(' + _ALTERNATIVAS_UNIDADE + r')\b\.?', re.IGNORECASE)
+_REGEX_MULTIPLICADOR = re.compile(r'^\s*(\d+(?:[.,]\d+)?)\s*x\s+', re.IGNORECASE)
 _REGEX_UNIDADE_NA_DESCRICAO = re.compile(
-    r'\b\d+(?:[.,]\d+)?\s*(kg|g|l|lt|un|und|unidade|unidades|cx|caixa|pct|pacote)\b',
+    r'\b\d+(?:[.,]\d+)?\s*(' + _ALTERNATIVAS_UNIDADE + r')\b',
     re.IGNORECASE
 )
-_LIMIAR_SIMILARIDADE = 0.45
+_LIMIAR_SIMILARIDADE = 0.80
+
+# Categorias de hortifrúti usadas como barreira semântica: nunca associar um item de uma
+# categoria a um produto de categoria distinta (ex: legume/verdura nunca vira fruta)
+_CATEGORIAS_HORTIFRUTI: Dict[str, str] = {
+    # Legumes e verduras
+    "vagem": "legume", "milho": "legume", "abobora": "legume", "abobrinha": "legume",
+    "alface": "legume", "cenoura": "legume", "batata": "legume", "tomate": "legume",
+    "cebola": "legume", "pimentao": "legume", "couve": "legume", "brocolis": "legume",
+    "repolho": "legume", "chuchu": "legume", "pepino": "legume", "beterraba": "legume",
+    "rabanete": "legume", "espinafre": "legume", "salsa": "legume", "cebolinha": "legume",
+    "coentro": "legume", "quiabo": "legume", "berinjela": "legume", "mandioca": "legume",
+    "aipim": "legume", "inhame": "legume", "ervilha": "legume", "rucula": "legume",
+    # Frutas
+    "morango": "fruta", "amora": "fruta", "uva": "fruta", "maca": "fruta", "banana": "fruta",
+    "laranja": "fruta", "abacaxi": "fruta", "melancia": "fruta", "mamao": "fruta", "pera": "fruta",
+    "pessego": "fruta", "manga": "fruta", "limao": "fruta", "tangerina": "fruta", "kiwi": "fruta",
+    "goiaba": "fruta", "ameixa": "fruta", "caju": "fruta", "abacate": "fruta", "framboesa": "fruta",
+    "mirtilo": "fruta", "melao": "fruta",
+}
+
+# Sinônimos/erros de grafia comuns no cadastro de produtos, normalizados para uma raiz em comum
+_SINONIMOS_PRODUTO: Dict[str, str] = {
+    "alfase": "alface",
+    "abobrinha": "abobora",
+}
+
+_STOPWORDS_PALAVRA_PRINCIPAL = {"de", "do", "da", "das", "dos", "com", "sem", "e"}
+
+
+def _mapear_unidade(token: Optional[str]) -> Optional[str]:
+    if not token:
+        return None
+    return _UNIDADES_ALIASES.get(token.strip(' .').lower())
 
 
 def _parse_valor_monetario(valor_str: str) -> float:
@@ -41,7 +98,12 @@ def _parse_valor_monetario(valor_str: str) -> float:
 
 
 def extrair_itens_de_texto(texto: str) -> List[Dict[str, Any]]:
-    """Extrai itens {nome_produto, quantidade, unidade, preco_unitario_nota} de um texto livre"""
+    """Extrai itens {nome_produto, quantidade, unidade, preco_unitario_nota} de um texto livre.
+
+    A unidade de medida é extraída de forma obrigatória: pode vir colada à quantidade
+    ("2kg", "2k"), separada em qualquer parte da linha ("... R$ 5,90 kilo") ou, na ausência
+    de qualquer indício, assume-se "UN" como padrão.
+    """
     itens: List[Dict[str, Any]] = []
 
     for linha_bruta in texto.splitlines():
@@ -62,25 +124,40 @@ def extrair_itens_de_texto(texto: str) -> List[Dict[str, Any]]:
         if preco <= 0:
             continue
 
-        restante = (linha[:ultimo_match.start()] + linha[ultimo_match.end():])
-        restante = re.sub(r'r\$', '', restante, flags=re.IGNORECASE)
-        restante = restante.strip(' -–—.:xX*')
+        antes_preco = re.sub(r'r\$', '', linha[:ultimo_match.start()], flags=re.IGNORECASE)
+        depois_preco = re.sub(r'r\$', '', linha[ultimo_match.end():], flags=re.IGNORECASE)
+
+        mult_match = _REGEX_MULTIPLICADOR.match(antes_preco)
+        if mult_match:
+            antes_preco = antes_preco[mult_match.end():]
 
         quantidade = 1.0
-        unidade = "UN"
-        qtd_match = _REGEX_QUANTIDADE.match(restante)
+        unidade_token: Optional[str] = None
+
+        qtd_match = _REGEX_QTD_UNIDADE_INLINE.search(antes_preco)
         if qtd_match:
             try:
                 quantidade = float(qtd_match.group(1).replace(',', '.'))
             except ValueError:
                 quantidade = 1.0
-            if qtd_match.group(2):
-                unidade = qtd_match.group(2).upper()[:2]
-            restante = restante[qtd_match.end():]
+            unidade_token = qtd_match.group(2)
+            nome_produto = antes_preco[:qtd_match.start()] + antes_preco[qtd_match.end():]
+        else:
+            nome_produto = antes_preco
 
-        nome_produto = restante.strip(' -–—.:')
+        # Unidade mencionada isoladamente (sem quantidade colada), antes ou depois do preço
+        if not unidade_token:
+            unidade_match = _REGEX_UNIDADE_GERAL.search(antes_preco) or _REGEX_UNIDADE_GERAL.search(depois_preco)
+            if unidade_match:
+                unidade_token = unidade_match.group(1)
+                nome_produto = _REGEX_UNIDADE_GERAL.sub(' ', nome_produto)
+
+        nome_produto = nome_produto.strip(' -–—.:xX*')
+        nome_produto = re.sub(r'\s+', ' ', nome_produto).strip()
         if not nome_produto:
             continue
+
+        unidade = _mapear_unidade(unidade_token) or "UN"
 
         itens.append({
             "nome_produto": nome_produto,
@@ -139,31 +216,88 @@ def _normalizar(texto: str) -> str:
     return texto
 
 
-def encontrar_produto_correspondente(nome_item: str, produtos: List[Produto]) -> Optional[Produto]:
-    """Faz fuzzy matching do nome extraído da nota com os produtos cadastrados"""
-    alvo = _normalizar(nome_item)
+def _normalizar_e_padronizar(texto: str) -> str:
+    """Normaliza e aplica o mapeamento de sinônimos/variações de grafia conhecidas"""
+    palavras = _normalizar(texto).split()
+    return " ".join(_SINONIMOS_PRODUTO.get(palavra, palavra) for palavra in palavras)
+
+
+def _categoria_de(texto_normalizado: str) -> Optional[str]:
+    for palavra in texto_normalizado.split():
+        categoria = _CATEGORIAS_HORTIFRUTI.get(palavra)
+        if categoria:
+            return categoria
+    return None
+
+
+def _palavra_principal(texto_normalizado: str) -> Optional[str]:
+    """Retorna a palavra-chave/raiz principal do item (primeira palavra significativa)"""
+    for palavra in texto_normalizado.split():
+        if palavra not in _STOPWORDS_PALAVRA_PRINCIPAL and len(palavra) >= 3:
+            return palavra
+    return None
+
+
+def encontrar_produto_correspondente(
+    nome_item: str,
+    unidade_item: str,
+    produtos: List[Produto]
+) -> tuple[Optional[Produto], Optional[Produto]]:
+    """Faz fuzzy matching do nome extraído da nota com os produtos cadastrados, exigindo que a
+    unidade de medida seja compatível (fator crítico) e aplicando duas barreiras semânticas:
+    (a) categorias de hortifrúti incompatíveis (fruta x legume/verdura) nunca são associadas;
+    (b) a palavra-chave/raiz principal do item precisa aparecer no nome do produto do sistema.
+    Abaixo do score mínimo de confiança (0.80), o item não é associado a nenhum produto.
+
+    Retorna uma tupla: (produto_compatível, produto_similar_com_unidade_divergente). Se houver um
+    produto com nome semelhante porém cadastrado em outra unidade (ex: nota em KG e sistema em
+    CX), o produto compatível é None e o segundo item da tupla traz esse produto apenas para fins
+    de aviso ao usuário - ele NÃO deve ser usado no cálculo de preços.
+    """
+    alvo = _normalizar_e_padronizar(nome_item)
     if not alvo:
-        return None
+        return None, None
 
-    melhor_produto: Optional[Produto] = None
-    melhor_ratio = 0.0
+    categoria_alvo = _categoria_de(alvo)
+    palavra_principal_alvo = _palavra_principal(alvo)
 
+    candidatos: List[tuple[float, Produto]] = []
     for produto in produtos:
-        candidato = _normalizar(produto.descricao)
+        candidato = _normalizar_e_padronizar(produto.descricao)
         if not candidato:
+            continue
+
+        # Barreira 1: categorias de hortifrúti incompatíveis nunca são associadas
+        categoria_candidato = _categoria_de(candidato)
+        if categoria_alvo and categoria_candidato and categoria_alvo != categoria_candidato:
             continue
 
         ratio = SequenceMatcher(None, alvo, candidato).ratio()
         if alvo in candidato or candidato in alvo:
-            ratio = max(ratio, 0.75)
-        if produto.codigo_interno and produto.codigo_interno.lower() in nome_item.lower():
             ratio = max(ratio, 0.9)
+        if produto.codigo_interno and produto.codigo_interno.lower() in nome_item.lower():
+            ratio = max(ratio, 0.95)
 
-        if ratio > melhor_ratio:
-            melhor_ratio = ratio
-            melhor_produto = produto
+        # Barreira 2: a raiz/palavra-chave principal do item precisa aparecer no produto do
+        # sistema (evita que uma palavra secundária compartilhada gere falso positivo)
+        if palavra_principal_alvo and palavra_principal_alvo not in candidato and ratio < 0.95:
+            continue
 
-    return melhor_produto if melhor_ratio >= _LIMIAR_SIMILARIDADE else None
+        if ratio >= _LIMIAR_SIMILARIDADE:
+            candidatos.append((ratio, produto))
+
+    if not candidatos:
+        return None, None
+
+    candidatos.sort(key=lambda c: c[0], reverse=True)
+
+    unidade_normalizada_item = (unidade_item or "UN").upper()
+    for _, produto in candidatos:
+        if (produto.unidade_medida or "").upper() == unidade_normalizada_item:
+            return produto, None
+
+    # Existe produto com nome semelhante, mas nenhum na mesma unidade de medida
+    return None, candidatos[0][1]
 
 
 def calcular_preco_tabela(
@@ -211,8 +345,11 @@ def gerar_sugestao_tabela(
     erros_por_tabela: Dict[int, List[float]] = {tabela.id: [] for tabela in tabelas}
 
     for item_extraido in itens_extraidos:
-        produto = encontrar_produto_correspondente(item_extraido["nome_produto"], produtos)
+        produto, produto_unidade_divergente = encontrar_produto_correspondente(
+            item_extraido["nome_produto"], item_extraido["unidade"], produtos
+        )
         precos_por_tabela: Dict[str, Optional[float]] = {}
+        aviso_unidade: Optional[str] = None
 
         for tabela in tabelas:
             if not produto:
@@ -226,6 +363,12 @@ def gerar_sugestao_tabela(
             if preco_nota > 0:
                 erros_por_tabela[tabela.id].append(abs(preco_calculado - preco_nota) / preco_nota)
 
+        if not produto and produto_unidade_divergente:
+            aviso_unidade = (
+                f"Unidade incompatível: Nota em {item_extraido['unidade']} / "
+                f"Sistema em {produto_unidade_divergente.unidade_medida}"
+            )
+
         comparativo.append({
             "item_reconhecido": item_extraido["nome_produto"],
             "quantidade": item_extraido["quantidade"],
@@ -234,6 +377,7 @@ def gerar_sugestao_tabela(
             "produto_id": produto.id if produto else None,
             "produto_descricao": produto.descricao if produto else None,
             "precos_por_tabela": precos_por_tabela,
+            "aviso_unidade": aviso_unidade,
         })
 
     tabelas_analisadas = []
@@ -270,14 +414,21 @@ def gerar_sugestao_tabela(
 
     total_itens = len(itens_extraidos)
     itens_reconhecidos = sum(1 for c in comparativo if c["produto_id"])
+    itens_unidade_incompativel = sum(1 for c in comparativo if c.get("aviso_unidade"))
     motivo = (
         f"A tabela '{tabela_sugerida.nome}' apresentou a menor variação percentual média "
         f"({melhor['erro_percentual']:.1f}%) em relação aos preços informados, considerando "
         f"{melhor['itens_comparados']} produto(s) reconhecido(s) de {total_itens} item(ns) "
         f"identificado(s) no conteúdo analisado, entre {len(tabelas)} tabela(s) ativa(s) comparada(s)."
     )
-    if itens_reconhecidos < total_itens:
-        motivo += f" {total_itens - itens_reconhecidos} item(ns) não foram reconhecidos no catálogo de produtos."
+    nao_reconhecidos = total_itens - itens_reconhecidos
+    if nao_reconhecidos:
+        motivo += f" {nao_reconhecidos} item(ns) não foram reconhecidos no catálogo de produtos."
+    if itens_unidade_incompativel:
+        motivo += (
+            f" {itens_unidade_incompativel} item(ns) foram desconsiderados da comparação por "
+            "divergência de unidade de medida entre a nota e o cadastro do sistema."
+        )
 
     return {
         "tabela_sugerida": {"id": tabela_sugerida.id, "nome": tabela_sugerida.nome},
