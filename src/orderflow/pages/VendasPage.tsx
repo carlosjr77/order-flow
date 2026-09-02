@@ -7,16 +7,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Pencil } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
+import { DanfeViewerDialog } from '../components/DanfeViewerDialog';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedVenda, setSelectedVenda] = useState<Venda | null>(null);
+  const [danfeVenda, setDanfeVenda] = useState<Venda | null>(null);
   const [empresaDados, setEmpresaDados] = useState<DadosEmpresa | null>(null);
   const [selectedVendasIds, setSelectedVendasIds] = useState<number[]>([]);
   const [isGeneratingLista, setIsGeneratingLista] = useState(false);
   const [isGeneratingRelatorio, setIsGeneratingRelatorio] = useState(false);
+  const [emittingVendaId, setEmittingVendaId] = useState<number | null>(null);
   const [modalMotivo, setModalMotivo] = useState<{
     aberto: boolean;
     tipo: 'cancelar' | 'excluir' | null;
@@ -100,6 +103,22 @@ export const VendasPage: React.FC = () => {
       loadVendas();
     } catch (error) {
       console.error('Erro ao concluir venda:', error);
+    }
+  };
+
+  const emitirNFe = async (venda: Venda) => {
+    if (!confirm(`Emitir NF-e em homologação para a venda #${venda.id}?`)) return;
+    try {
+      setEmittingVendaId(venda.id);
+      const resultado = await apiClient.emitirNFe(venda.id) as { chave_acesso: string; numero: number; serie: number };
+      alert(`NF-e autorizada em homologação. Chave: ${resultado.chave_acesso}`);
+      setDanfeVenda(venda);
+      await loadVendas();
+    } catch (error: any) {
+      console.error('Erro ao emitir NF-e:', error);
+      alert(error?.message || 'Não foi possível emitir a NF-e. Verifique a configuração fiscal e o certificado A1.');
+    } finally {
+      setEmittingVendaId(null);
     }
   };
 
@@ -541,6 +560,14 @@ export const VendasPage: React.FC = () => {
                       <DownloadCloud className="w-4 h-4 mr-1" />
                       Baixar PDF
                     </Button>
+                    <Button size="sm" variant="outline" onClick={() => setDanfeVenda(venda)}>
+                      <Printer className="w-4 h-4 mr-1" />
+                      Ver DANFE
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => void emitirNFe(venda)} disabled={emittingVendaId === venda.id}>
+                      <Printer className="w-4 h-4 mr-1" />
+                      {emittingVendaId === venda.id ? 'Emitindo...' : 'Emitir NF-e'}
+                    </Button>
                     <Button
                       size="sm"
                       onClick={() => editarVenda(venda.id)}
@@ -664,6 +691,12 @@ export const VendasPage: React.FC = () => {
             </Card>
           </div>
         )}
+
+        <DanfeViewerDialog
+          open={!!danfeVenda}
+          vendaId={danfeVenda?.id}
+          onOpenChange={(open) => { if (!open) setDanfeVenda(null); }}
+        />
 
         {/* Modal de Motivo do Cancelamento/Exclusão */}
         {modalMotivo.aberto && (

@@ -23,6 +23,12 @@ export const ProdutosPage: React.FC = () => {
     margem_lucro: 0,
     unidade_medida: 'UN',
     ncm: '',
+    cest: '',
+    cfop: '',
+    csosn: '',
+    aliquota_icms: 0,
+    aliquota_pis: 0,
+    aliquota_cofins: 0,
     estoque_inicial: 0,
     vender_sem_estoque: true,  // Default: permite vender sem estoque
   });
@@ -128,6 +134,12 @@ export const ProdutosPage: React.FC = () => {
       margem_lucro: produto.margem_lucro ?? 0,
       unidade_medida: produto.unidade_medida,
       ncm: produto.ncm || '',
+      cest: produto.cest || '',
+      cfop: produto.cfop || '',
+      csosn: produto.csosn || '',
+      aliquota_icms: produto.aliquota_icms || 0,
+      aliquota_pis: produto.aliquota_pis || 0,
+      aliquota_cofins: produto.aliquota_cofins || 0,
       estoque_inicial: produto.estoque_atual,
       vender_sem_estoque: produto.vender_sem_estoque || false,
     });
@@ -147,6 +159,12 @@ export const ProdutosPage: React.FC = () => {
       margem_lucro: 0,
       unidade_medida: 'UN',
       ncm: '',
+      cest: '',
+      cfop: '',
+      csosn: '',
+      aliquota_icms: 0,
+      aliquota_pis: 0,
+      aliquota_cofins: 0,
       estoque_inicial: 0,
       vender_sem_estoque: true,  // Default: permite vender sem estoque
     });
@@ -416,6 +434,32 @@ export const ProdutosPage: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, ncm: e.target.value })}
                     placeholder="12345678"
                   />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {[
+                    ['cest', 'CEST', 7],
+                    ['cfop', 'CFOP específico', 4],
+                    ['csosn', 'CSOSN específico', 3],
+                  ].map(([name, label, maxLength]) => (
+                    <div key={name}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                      <Input value={String(formData[name as keyof typeof formData] || '')} onChange={(e) => setFormData({ ...formData, [name]: e.target.value })} maxLength={maxLength as number} />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {[
+                    ['aliquota_icms', 'ICMS (%)'],
+                    ['aliquota_pis', 'PIS (%)'],
+                    ['aliquota_cofins', 'COFINS (%)'],
+                  ].map(([name, label]) => (
+                    <div key={name}>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                      <Input type="number" min="0" max="100" step="0.01" value={Number(formData[name as keyof typeof formData] || 0)} onChange={(e) => setFormData({ ...formData, [name]: Number(e.target.value) })} />
+                    </div>
+                  ))}
                 </div>
               </div>
 

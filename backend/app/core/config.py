@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     API_TITLE: str = "Order Flow - Sistema de Gestão de Vendas"
     API_VERSION: str = "1.0.0"
     API_PORT: int = int(os.getenv("API_PORT", 8000))
+
+    # Certificado A1: nunca salvar senha ou conteúdo do certificado no banco.
+    NFE_CERTIFICATE_PATH: str = os.getenv("NFE_CERTIFICATE_PATH", "")
+    NFE_CERTIFICATE_PASSWORD: str = os.getenv("NFE_CERTIFICATE_PASSWORD", "")
+    NFE_UF: str = os.getenv("NFE_UF", "RJ")
     
     class Config:
         env_file = ".env"

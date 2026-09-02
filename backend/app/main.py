@@ -5,7 +5,7 @@ import uvicorn
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco
+from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco, fiscal
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -209,6 +209,63 @@ def run_migrations():
                 print("✅ Migração: coluna 'tabela_preco_id' adicionada em 'vendas'")
             else:
                 print("✅ Migração: coluna 'tabela_preco_id' já existe em 'vendas'")
+
+            colunas_fiscais_produto = {
+                "cest": "VARCHAR(7)",
+                "cfop": "VARCHAR(4)",
+                "csosn": "VARCHAR(3)",
+                "aliquota_icms": "FLOAT DEFAULT 0",
+                "aliquota_pis": "FLOAT DEFAULT 0",
+                "aliquota_cofins": "FLOAT DEFAULT 0",
+            }
+            for nome_coluna, tipo_coluna in colunas_fiscais_produto.items():
+                result = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_name = 'produtos' AND column_name = :nome_coluna"
+                ), {"nome_coluna": nome_coluna}).fetchone()
+                if result[0] == 0:
+                    conn.execute(text(f"ALTER TABLE produtos ADD COLUMN {nome_coluna} {tipo_coluna}"))
+                    conn.commit()
+
+            colunas_endereco_fiscal = {
+                "codigo_municipio_ibge": "VARCHAR(7)",
+                "codigo_pais": "VARCHAR(4) NOT NULL DEFAULT '1058'",
+            }
+            for nome_coluna, tipo_coluna in colunas_endereco_fiscal.items():
+                result = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_name = 'empresas' AND column_name = :nome_coluna"
+                ), {"nome_coluna": nome_coluna}).fetchone()
+                if result[0] == 0:
+                    conn.execute(text(f"ALTER TABLE empresas ADD COLUMN {nome_coluna} {tipo_coluna}"))
+                    conn.commit()
+
+            # Adicionar configuração fiscal da empresa se não existir
+            colunas_fiscais = {
+                "inscricao_estadual": "VARCHAR(20)",
+                "regime_tributario": "VARCHAR(30) DEFAULT 'simples_nacional'",
+                "cfop_dentro_estado": "VARCHAR(4)",
+                "cfop_fora_estado": "VARCHAR(4)",
+                "csosn_padrao": "VARCHAR(3)",
+                "aliquota_icms": "FLOAT DEFAULT 0",
+                "aliquota_pis": "FLOAT DEFAULT 0",
+                "aliquota_cofins": "FLOAT DEFAULT 0",
+                "serie_nfe": "INTEGER DEFAULT 1",
+                "numero_nfe": "INTEGER DEFAULT 1",
+                "ambiente_nfe": "VARCHAR(15) NOT NULL DEFAULT 'homologacao'",
+                "emissao_nfe_habilitada": "INTEGER NOT NULL DEFAULT 0",
+            }
+            for nome_coluna, tipo_coluna in colunas_fiscais.items():
+                result = conn.execute(text(
+                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "WHERE table_name = 'empresas' AND column_name = :nome_coluna"
+                ), {"nome_coluna": nome_coluna}).fetchone()
+                if result[0] == 0:
+                    conn.execute(text(
+                        f"ALTER TABLE empresas ADD COLUMN {nome_coluna} {tipo_coluna}"
+                    ))
+                    conn.commit()
+                    print(f"✅ Migração: coluna '{nome_coluna}' adicionada em 'empresas'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 
@@ -278,6 +335,7 @@ app.include_router(clientes.router)
 app.include_router(usuarios.router)
 app.include_router(audit.router)
 app.include_router(tabelas_preco.router)
+app.include_router(fiscal.router)
 
 
 @app.get("/")

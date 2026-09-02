@@ -28,6 +28,12 @@ export interface Produto {
   estoque_atual: number;
   unidade_medida: string;
   ncm?: string;
+  cest?: string | null;
+  cfop?: string | null;
+  csosn?: string | null;
+  aliquota_icms?: number | null;
+  aliquota_pis?: number | null;
+  aliquota_cofins?: number | null;
   vender_sem_estoque: boolean;
   created_at: string;
   updated_at: string;
@@ -115,6 +121,20 @@ export interface DadosEmpresa {
   telefone?: string;
   email?: string;
   margem_lucro_padrao?: number | null;  // Margem padrão da empresa (1.0 = 100%)
+  inscricao_estadual?: string | null;
+  regime_tributario?: 'simples_nacional' | 'lucro_presumido' | 'lucro_real' | null;
+  cfop_dentro_estado?: string | null;
+  cfop_fora_estado?: string | null;
+  csosn_padrao?: string | null;
+  aliquota_icms?: number | null;
+  aliquota_pis?: number | null;
+  aliquota_cofins?: number | null;
+  serie_nfe?: number | null;
+  numero_nfe?: number | null;
+  ambiente_nfe?: 'homologacao' | 'producao' | null;
+  emissao_nfe_habilitada?: boolean;
+  codigo_municipio_ibge?: string | null;
+  codigo_pais?: string | null;
 }
 
 export interface AuditLog {

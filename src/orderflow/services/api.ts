@@ -155,6 +155,37 @@ export class APIClient {
     return this.request('/api/vendas', 'POST', data);
   }
 
+  async gerarDanfe(xml: string): Promise<{ blob: Blob; filename: string }> {
+    const response = await fetch(`${this.baseURL}/api/fiscal/danfe/gerar-pdf`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ xml }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        this.clearToken();
+        window.location.href = '/login';
+      }
+      throw new Error(`API Error ${response.status}`);
+    }
+
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'DANFE.pdf';
+    return { blob: await response.blob(), filename };
+  }
+
+  async emitirNFe(vendaId: number) {
+    return this.request('/api/fiscal/nfe/emitir', 'POST', { venda_id: vendaId });
+  }
+
+  async obterDanfeNFe(vendaId: number): Promise<{ blob: Blob; filename: string }> {
+    const response = await fetch(`${this.baseURL}/api/fiscal/nfe/${vendaId}/danfe`, { headers: this.getHeaders() });
+    if (!response.ok) throw new Error(`API Error ${response.status}`);
+    const disposition = response.headers.get('Content-Disposition') || '';
+    return { blob: await response.blob(), filename: disposition.match(/filename="?([^";]+)"?/i)?.[1] || 'DANFE.pdf' };
+  }
+
   async concluirVenda(id: number) {
     return this.request(`/api/vendas/${id}/concluir`, 'PUT');
   }

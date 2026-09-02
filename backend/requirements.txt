@@ -12,6 +12,8 @@ python-multipart==0.0.6
 pillow>=10.1.0
 python-multipart==0.0.6
 reportlab==4.0.7
+brazilfiscalreport==1.0.2
+pynfe==0.6.5
 requests==2.31.0
 aiofiles==23.2.1
 bcrypt==4.1.1

@@ -65,6 +65,12 @@ class ProdutoBase(BaseModel):
     margem_lucro: Optional[float] = None  # Margem de lucro específica do produto (em decimal, ex: 1.0 = 100%)
     unidade_medida: str = "UN"
     ncm: Optional[str] = None
+    cest: Optional[str] = None
+    cfop: Optional[str] = None
+    csosn: Optional[str] = None
+    aliquota_icms: Optional[float] = 0
+    aliquota_pis: Optional[float] = 0
+    aliquota_cofins: Optional[float] = 0
     vender_sem_estoque: bool = True  # Default: permite vender sem estoque
 
 
@@ -79,6 +85,12 @@ class ProdutoUpdate(BaseModel):
     margem_lucro: Optional[float] = None
     unidade_medida: Optional[str] = None
     ncm: Optional[str] = None
+    cest: Optional[str] = None
+    cfop: Optional[str] = None
+    csosn: Optional[str] = None
+    aliquota_icms: Optional[float] = None
+    aliquota_pis: Optional[float] = None
+    aliquota_cofins: Optional[float] = None
     vender_sem_estoque: Optional[bool] = None
 
 
@@ -190,6 +202,20 @@ class EmpresaBase(BaseModel):
     telefone: Optional[str] = None
     email: Optional[str] = None
     margem_lucro_padrao: Optional[float] = 1.0  # Margem padrão de 100% (1.0 = 100%)
+    inscricao_estadual: Optional[str] = None
+    regime_tributario: Optional[Literal["simples_nacional", "lucro_presumido", "lucro_real"]] = "simples_nacional"
+    cfop_dentro_estado: Optional[str] = None
+    cfop_fora_estado: Optional[str] = None
+    csosn_padrao: Optional[str] = None
+    aliquota_icms: Optional[float] = 0
+    aliquota_pis: Optional[float] = 0
+    aliquota_cofins: Optional[float] = 0
+    serie_nfe: Optional[int] = 1
+    numero_nfe: Optional[int] = 1
+    ambiente_nfe: Optional[Literal["homologacao", "producao"]] = "homologacao"
+    emissao_nfe_habilitada: Optional[bool] = False
+    codigo_municipio_ibge: Optional[str] = None
+    codigo_pais: Optional[str] = "1058"
 
 
 class EmpresaCreate(EmpresaBase):

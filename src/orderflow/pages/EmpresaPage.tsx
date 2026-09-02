@@ -25,6 +25,20 @@ export const EmpresaPage: React.FC = () => {
     cep: '',
     telefone: '',
     email: '',
+    inscricao_estadual: '',
+    regime_tributario: 'simples_nacional',
+    cfop_dentro_estado: '',
+    cfop_fora_estado: '',
+    csosn_padrao: '',
+    aliquota_icms: 0,
+    aliquota_pis: 0,
+    aliquota_cofins: 0,
+    serie_nfe: 1,
+    numero_nfe: 1,
+    ambiente_nfe: 'homologacao',
+    emissao_nfe_habilitada: false,
+    codigo_municipio_ibge: '',
+    codigo_pais: '1058',
   });
 
   useEffect(() => {
@@ -37,7 +51,7 @@ export const EmpresaPage: React.FC = () => {
       const dados = await apiClient.obterDadosEmpresa();
       if (dados) {
         setEmpresa(dados);
-        setFormData(dados);
+        setFormData({ ...formData, ...dados });
       } else {
         // Sem dados, manter o formulário vazio
         setEmpresa(null);
@@ -277,6 +291,90 @@ export const EmpresaPage: React.FC = () => {
                   placeholder="01000-000"
                 />
               </div>
+
+              <div className="border-t pt-6">
+                <h2 className="text-lg font-semibold text-gray-900">Configuração fiscal da NF-e</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Estes dados serão usados apenas quando você escolher emitir uma NF-e para uma venda específica.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Inscrição Estadual</label>
+                  <Input name="inscricao_estadual" value={formData.inscricao_estadual || ''} onChange={handleInputChange} placeholder="Informe a IE" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Regime tributário</label>
+                  <select
+                    name="regime_tributario"
+                    value={formData.regime_tributario || 'simples_nacional'}
+                    onChange={(event) => setFormData({ ...formData, regime_tributario: event.target.value as DadosEmpresa['regime_tributario'] })}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="simples_nacional">Simples Nacional</option>
+                    <option value="lucro_presumido">Lucro Presumido</option>
+                    <option value="lucro_real">Lucro Real</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Código IBGE do município</label>
+                  <Input name="codigo_municipio_ibge" value={formData.codigo_municipio_ibge || ''} onChange={handleInputChange} placeholder="Ex.: 3304557" maxLength={7} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CFOP dentro do estado</label>
+                  <Input name="cfop_dentro_estado" value={formData.cfop_dentro_estado || ''} onChange={handleInputChange} placeholder="Ex.: 5102" maxLength={4} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CFOP fora do estado</label>
+                  <Input name="cfop_fora_estado" value={formData.cfop_fora_estado || ''} onChange={handleInputChange} placeholder="Ex.: 6102" maxLength={4} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">CSOSN padrão</label>
+                  <Input name="csosn_padrao" value={formData.csosn_padrao || ''} onChange={handleInputChange} placeholder="Ex.: 102" maxLength={3} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  ['aliquota_icms', 'ICMS (%)'],
+                  ['aliquota_pis', 'PIS (%)'],
+                  ['aliquota_cofins', 'COFINS (%)'],
+                ].map(([name, label]) => (
+                  <div key={name}>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
+                    <Input name={name} type="number" min="0" max="100" step="0.01" value={Number(formData[name as keyof DadosEmpresa] || 0)} onChange={(event) => setFormData({ ...formData, [name]: Number(event.target.value) })} />
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Série da NF-e</label>
+                  <Input name="serie_nfe" type="number" min="1" value={formData.serie_nfe || 1} onChange={(event) => setFormData({ ...formData, serie_nfe: Number(event.target.value) })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Próximo número da NF-e</label>
+                  <Input name="numero_nfe" type="number" min="1" value={formData.numero_nfe || 1} onChange={(event) => setFormData({ ...formData, numero_nfe: Number(event.target.value) })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ambiente</label>
+                  <select name="ambiente_nfe" value={formData.ambiente_nfe || 'homologacao'} onChange={(event) => setFormData({ ...formData, ambiente_nfe: event.target.value as DadosEmpresa['ambiente_nfe'] })} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    <option value="homologacao">Homologação</option>
+                    <option value="producao">Produção</option>
+                  </select>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 rounded-md border border-amber-200 bg-amber-50 p-4">
+                <input type="checkbox" checked={!!formData.emissao_nfe_habilitada} onChange={(event) => setFormData({ ...formData, emissao_nfe_habilitada: event.target.checked })} className="mt-1 h-4 w-4" />
+                <span className="text-sm text-amber-900">Habilitar emissão de NF-e para vendas específicas</span>
+              </label>
+
+              <p className="text-xs text-gray-500">O certificado A1 e sua senha serão configurados como segredo do backend e não ficam armazenados neste cadastro.</p>
 
               {/* Botões */}
               <div className="flex gap-3 pt-4 border-t">

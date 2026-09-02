@@ -12,6 +12,7 @@ import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrai
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 import { calcularPrecoVenda } from '../utils/precoDinamico';
 import { SugestaoTabelaModal } from '../components/SugestaoTabelaModal';
+import { DanfeViewerDialog } from '../components/DanfeViewerDialog';
 
 type ModoPrecoPersonalizado = 'padrao' | 'preco' | 'margem';
 
@@ -44,6 +45,7 @@ export const PDVPage: React.FC = () => {
   const [showModalErro, setShowModalErro] = useState(false);
   const [erroMensagem, setErroMensagem] = useState('');
   const [vendaFinalizada, setVendaFinalizada] = useState<Venda | null>(null);
+  const [showDanfeDialog, setShowDanfeDialog] = useState(false);
   const [isLoadingEdicao, setIsLoadingEdicao] = useState(false);
   const [concluirAoSalvar, setConcluirAoSalvar] = useState(false);
   
@@ -1486,6 +1488,10 @@ export const PDVPage: React.FC = () => {
                 <Printer className="w-4 h-4 mr-2" />
                 Imprimir / Baixar PDF
               </Button>
+              <Button onClick={() => setShowDanfeDialog(true)} variant="outline" className="w-full">
+                <Printer className="w-4 h-4 mr-2" />
+                Ver DANFE fiscal
+              </Button>
               <div className="flex gap-3">
                 <Button onClick={continuarVendendo} variant="outline" className="flex-1">
                   Continuar Vendendo
@@ -1498,6 +1504,8 @@ export const PDVPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+      <DanfeViewerDialog open={showDanfeDialog} onOpenChange={setShowDanfeDialog} />
 
       {/* Modal de Erro */}
       {showModalErro && (
