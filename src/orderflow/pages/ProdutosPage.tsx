@@ -328,13 +328,13 @@ export const ProdutosPage: React.FC = () => {
 
       {/* Modal Produto */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md p-6">
-            <h2 className="text-xl font-bold mb-4">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black bg-opacity-50 p-4 sm:items-center">
+          <Card className="my-4 flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col p-6 sm:my-0">
+            <h2 className="mb-4 flex-shrink-0 text-xl font-bold">
               {editingId ? 'Editar Produto' : 'Novo Produto'}
             </h2>
 
-            <div className="space-y-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Código Interno*</label>
                 <Input
@@ -491,7 +491,7 @@ export const ProdutosPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-6 flex gap-3">
+            <div className="mt-6 flex flex-shrink-0 gap-3">
               <Button
                 variant="outline"
                 onClick={() => { setShowModal(false); setEditingId(null); }}
