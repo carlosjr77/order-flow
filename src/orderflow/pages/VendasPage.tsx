@@ -117,7 +117,7 @@ export const VendasPage: React.FC = () => {
     } catch (error: any) {
       console.error('Erro ao emitir NF-e:', error);
       if (String(error?.message || '').includes('539')) {
-        setDanfeVenda(venda);
+        alert('A NF-e já possui este número na SEFAZ. O próximo número foi ajustado; tente emitir novamente.');
         return;
       }
       alert(error?.message || 'Não foi possível emitir a NF-e. Verifique a configuração fiscal e o certificado A1.');

@@ -83,6 +83,10 @@ def emitir_nfe_venda(
             empresa.numero_nfe = max(int(empresa.numero_nfe or 1), int(resultado["numero"]) + 1)
             db.commit()
             logger.warning("Numeração NF-e ajustada após duplicidade | próximo_numero=%s", empresa.numero_nfe)
+            raise HTTPException(
+                status_code=422,
+                detail=f"A NF-e número {resultado['numero']} já foi utilizada pela SEFAZ. Próximo número ajustado para {empresa.numero_nfe}; tente emitir novamente.",
+            )
         raise HTTPException(status_code=422, detail=resultado.get("mensagem_status", "NF-e rejeitada pela SEFAZ."))
     empresa.numero_nfe = existente.numero + 1
     db.commit()
