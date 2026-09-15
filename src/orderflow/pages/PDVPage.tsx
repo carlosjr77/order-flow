@@ -548,6 +548,10 @@ export const PDVPage: React.FC = () => {
       setShowDanfeDialog(true);
     } catch (error: any) {
       console.error('Erro ao emitir NF-e:', error);
+      if (String(error?.message || '').includes('539')) {
+        setShowDanfeDialog(true);
+        return;
+      }
       alert(error?.message || 'Não foi possível emitir a NF-e. Verifique a configuração fiscal e o certificado A1.');
     } finally {
       setIsEmittingNFe(false);

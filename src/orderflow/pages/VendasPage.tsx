@@ -116,6 +116,10 @@ export const VendasPage: React.FC = () => {
       await loadVendas();
     } catch (error: any) {
       console.error('Erro ao emitir NF-e:', error);
+      if (String(error?.message || '').includes('539')) {
+        setDanfeVenda(venda);
+        return;
+      }
       alert(error?.message || 'Não foi possível emitir a NF-e. Verifique a configuração fiscal e o certificado A1.');
     } finally {
       setEmittingVendaId(null);

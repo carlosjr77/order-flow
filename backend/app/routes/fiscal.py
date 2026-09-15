@@ -28,7 +28,7 @@ def emitir_nfe_venda(
     current_user: dict = Depends(get_current_user),
 ):
     del current_user
-    empresa = db.query(Empresa).first()
+    empresa = db.query(Empresa).with_for_update().first()
     venda = db.query(Venda).filter(Venda.id == payload.venda_id, Venda.deleted_at.is_(None)).first()
     if not empresa or not venda:
         raise HTTPException(status_code=404, detail="Empresa ou venda não encontrada.")
@@ -79,6 +79,10 @@ def emitir_nfe_venda(
             resultado.get("codigo_status"),
             resultado.get("mensagem_status"),
         )
+        if resultado.get("codigo_status") == "539":
+            empresa.numero_nfe = max(int(empresa.numero_nfe or 1), int(resultado["numero"]) + 1)
+            db.commit()
+            logger.warning("Numeração NF-e ajustada após duplicidade | próximo_numero=%s", empresa.numero_nfe)
         raise HTTPException(status_code=422, detail=resultado.get("mensagem_status", "NF-e rejeitada pela SEFAZ."))
     empresa.numero_nfe = existente.numero + 1
     db.commit()
