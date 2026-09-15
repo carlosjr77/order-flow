@@ -1,4 +1,5 @@
 from io import BytesIO
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
@@ -13,6 +14,7 @@ from app.utils.nfe_emissao import EmissaoNFeError, emitir_nfe
 
 
 router = APIRouter(prefix="/api/fiscal", tags=["Fiscal"])
+logger = logging.getLogger(__name__)
 
 
 class EmitirNFeRequest(BaseModel):
@@ -49,12 +51,16 @@ def emitir_nfe_venda(
     try:
         resultado = emitir_nfe(venda, empresa, cliente, itens)
     except EmissaoNFeError as exc:
+        logger.warning("NF-e não emitida | venda_id=%s | motivo=%s", venda.id, str(exc))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except FileNotFoundError as exc:
+        logger.exception("NF-e falhou | venda_id=%s | certificado não encontrado", venda.id)
         raise HTTPException(status_code=422, detail="Certificado A1 não encontrado no backend.") from exc
     except PermissionError as exc:
+        logger.exception("NF-e falhou | venda_id=%s | sem permissão para ler certificado", venda.id)
         raise HTTPException(status_code=422, detail="O backend não tem permissão para ler o certificado A1.") from exc
     except Exception as exc:
+        logger.exception("NF-e falhou | venda_id=%s | erro inesperado na assinatura ou SEFAZ", venda.id)
         raise HTTPException(status_code=502, detail="Falha de comunicação com a SEFAZ em homologação.") from exc
 
     if not existente:
@@ -67,10 +73,17 @@ def emitir_nfe_venda(
     db.commit()
     db.refresh(existente)
     if resultado["status"] != "autorizada":
+        logger.warning(
+            "NF-e rejeitada pela SEFAZ | venda_id=%s | cStat=%s | motivo=%s",
+            venda.id,
+            resultado.get("codigo_status"),
+            resultado.get("mensagem_status"),
+        )
         raise HTTPException(status_code=422, detail=resultado.get("mensagem_status", "NF-e rejeitada pela SEFAZ."))
     empresa.numero_nfe = existente.numero + 1
     db.commit()
     db.refresh(existente)
+    logger.info("NF-e autorizada | venda_id=%s | nfe_id=%s | chave=%s", venda.id, existente.id, existente.chave_acesso)
     return {"id": existente.id, "venda_id": venda.id, "status": existente.status, "chave_acesso": existente.chave_acesso, "numero": existente.numero, "serie": existente.serie, "danfe_url": f"/api/fiscal/nfe/{venda.id}/danfe"}
 
 
