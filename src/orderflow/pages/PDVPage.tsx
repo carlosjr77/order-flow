@@ -46,6 +46,7 @@ export const PDVPage: React.FC = () => {
   const [erroMensagem, setErroMensagem] = useState('');
   const [vendaFinalizada, setVendaFinalizada] = useState<Venda | null>(null);
   const [showDanfeDialog, setShowDanfeDialog] = useState(false);
+  const [isEmittingNFe, setIsEmittingNFe] = useState(false);
   const [isLoadingEdicao, setIsLoadingEdicao] = useState(false);
   const [concluirAoSalvar, setConcluirAoSalvar] = useState(false);
   
@@ -536,6 +537,20 @@ export const PDVPage: React.FC = () => {
       pdf.save(nomeArquivo);
     } catch (error) {
       console.error('Erro ao gerar PDF:', error);
+    }
+  };
+
+  const emitirNFeVendaFinalizada = async () => {
+    if (!vendaFinalizada) return;
+    try {
+      setIsEmittingNFe(true);
+      await apiClient.emitirNFe(vendaFinalizada.id);
+      setShowDanfeDialog(true);
+    } catch (error: any) {
+      console.error('Erro ao emitir NF-e:', error);
+      alert(error?.message || 'Não foi possível emitir a NF-e. Verifique a configuração fiscal e o certificado A1.');
+    } finally {
+      setIsEmittingNFe(false);
     }
   };
 
@@ -1488,9 +1503,9 @@ export const PDVPage: React.FC = () => {
                 <Printer className="w-4 h-4 mr-2" />
                 Imprimir / Baixar PDF
               </Button>
-              <Button onClick={() => setShowDanfeDialog(true)} variant="outline" className="w-full">
+              <Button onClick={() => void emitirNFeVendaFinalizada()} variant="outline" className="w-full" disabled={isEmittingNFe}>
                 <Printer className="w-4 h-4 mr-2" />
-                Ver DANFE fiscal
+                {isEmittingNFe ? 'Emitindo NF-e...' : 'Emitir NF-e e gerar DANFE'}
               </Button>
               <div className="flex gap-3">
                 <Button onClick={continuarVendendo} variant="outline" className="flex-1">
@@ -1505,7 +1520,7 @@ export const PDVPage: React.FC = () => {
         </div>
       )}
 
-      <DanfeViewerDialog open={showDanfeDialog} onOpenChange={setShowDanfeDialog} />
+      <DanfeViewerDialog open={showDanfeDialog} vendaId={vendaFinalizada?.id} onOpenChange={setShowDanfeDialog} />
 
       {/* Modal de Erro */}
       {showModalErro && (

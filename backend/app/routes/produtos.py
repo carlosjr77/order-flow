@@ -10,6 +10,19 @@ from app.utils.audit import registrar_auditoria, get_client_ip
 router = APIRouter(prefix="/api/produtos", tags=["Produtos"])
 
 
+def normalizar_ncm(valor: str | None) -> str | None:
+    """Armazena o NCM somente com os oito dígitos exigidos pelo banco/XML."""
+    if not valor:
+        return None
+    ncm = "".join(caractere for caractere in valor if caractere.isdigit())
+    if len(ncm) != 8:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="O NCM deve conter exatamente 8 dígitos.",
+        )
+    return ncm
+
+
 def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
     """Obtém o objeto Usuario completo a partir do token"""
     return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
@@ -80,7 +93,13 @@ def criar_produto(
         preco_venda=produto_data.preco_venda,
         margem_lucro=produto_data.margem_lucro,
         unidade_medida=produto_data.unidade_medida,
-        ncm=produto_data.ncm,
+        ncm=normalizar_ncm(produto_data.ncm),
+        cest=produto_data.cest,
+        cfop=produto_data.cfop,
+        csosn=produto_data.csosn,
+        aliquota_icms=produto_data.aliquota_icms,
+        aliquota_pis=produto_data.aliquota_pis,
+        aliquota_cofins=produto_data.aliquota_cofins,
         estoque_atual=produto_data.estoque_inicial or 0,
         vender_sem_estoque=1 if produto_data.vender_sem_estoque else 0
     )
@@ -125,6 +144,8 @@ def atualizar_produto(
     
     update_data = produto_data.dict(exclude_unset=True)
     for field, value in update_data.items():
+        if field == "ncm":
+            value = normalizar_ncm(value)
         # Converter boolean para integer para vender_sem_estoque (0 ou 1)
         if field == "vender_sem_estoque" and isinstance(value, bool):
             value = 1 if value else 0

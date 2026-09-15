@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
+import os
 import re
 from typing import Any
 
 from app.core.config import settings
-from app.models import Empresa, ItemVenda, Produto, Venda
+from app.models import Cliente, Empresa, ItemVenda, Produto, Venda
 
 NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe"
 
@@ -24,7 +25,7 @@ def _decimal(valor: Any) -> Decimal:
 
 
 def _texto(valor: Any) -> str:
-    return str(valor or "")
+    return "" if valor is None else str(valor)
 
 
 def _chave_nfe(empresa: Empresa, venda: Venda, numero: int, serie: int) -> str:
@@ -54,7 +55,7 @@ def _configurar_elemento(elemento: Any, nome: str, valor: Any) -> Any:
     return filho
 
 
-def montar_xml_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, Produto]]) -> tuple[Any, str, int, int]:
+def montar_xml_nfe(venda: Venda, empresa: Empresa, cliente: Cliente | None, itens: list[tuple[ItemVenda, Produto]], ambiente: str = "homologacao") -> tuple[Any, str, int, int]:
     if not empresa.inscricao_estadual:
         raise EmissaoNFeError("Inscrição Estadual da empresa não configurada.")
     if not empresa.codigo_municipio_ibge:
@@ -63,12 +64,20 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, 
         raise EmissaoNFeError("CFOP dentro e fora do estado devem ser configurados.")
     if not empresa.csosn_padrao:
         raise EmissaoNFeError("CSOSN padrão não configurado.")
+    if not cliente or not cliente.documento:
+        raise EmissaoNFeError("A venda precisa de um cliente com CPF ou CNPJ para emissão da NF-e.")
+    if not all((cliente.endereco, cliente.numero, cliente.bairro, cliente.cidade, cliente.estado, cliente.cep)):
+        raise EmissaoNFeError("O endereço completo do cliente é obrigatório para emissão da NF-e.")
     if not itens:
         raise EmissaoNFeError("Venda sem itens para emissão.")
     if any(not produto.ncm for _, produto in itens):
         raise EmissaoNFeError("Todos os produtos da venda precisam de NCM.")
     if not settings.NFE_CERTIFICATE_PATH or not settings.NFE_CERTIFICATE_PASSWORD:
         raise EmissaoNFeError("Certificado A1 não configurado no backend.")
+    if not os.path.isfile(settings.NFE_CERTIFICATE_PATH):
+        raise EmissaoNFeError(
+            f"Certificado A1 não encontrado em '{settings.NFE_CERTIFICATE_PATH}'."
+        )
 
     numero = int(empresa.numero_nfe or 1)
     serie = int(empresa.serie_nfe or 1)
@@ -97,6 +106,24 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, 
     _configurar_elemento(emit, "IE", _numeros(empresa.inscricao_estadual))
     _configurar_elemento(emit, "CRT", "1" if empresa.regime_tributario == "simples_nacional" else "3")
 
+    dest = etree.SubElement(inf, "dest")
+    documento = _numeros(cliente.documento)
+    tag_documento = "CNPJ" if len(documento) == 14 else "CPF" if len(documento) == 11 else None
+    if not tag_documento:
+        raise EmissaoNFeError("O CPF/CNPJ do cliente é inválido.")
+    _configurar_elemento(dest, tag_documento, documento)
+    nome_destinatario = cliente.nome
+    if ambiente == "homologacao":
+        nome_destinatario = "NF-E EMITIDA EM AMBIENTE DE HOMOLOGACAO - SEM VALOR FISCAL"
+    _configurar_elemento(dest, "xNome", nome_destinatario)
+    endereco_dest = etree.SubElement(dest, "enderDest")
+    codigo_municipio_destino = getattr(cliente, "codigo_municipio_ibge", None) or empresa.codigo_municipio_ibge
+    for tag, valor in (("xLgr", cliente.endereco), ("nro", cliente.numero), ("xBairro", cliente.bairro), ("cMun", codigo_municipio_destino), ("xMun", cliente.cidade), ("UF", cliente.estado.upper()), ("CEP", _numeros(cliente.cep)), ("cPais", empresa.codigo_pais), ("xPais", "BRASIL")):
+        _configurar_elemento(endereco_dest, tag, valor)
+    _configurar_elemento(dest, "indIEDest", "9")
+    if cliente.email:
+        _configurar_elemento(dest, "email", cliente.email)
+
     total_produtos = Decimal("0")
     for indice, (item, produto) in enumerate(itens, start=1):
         quantidade = _decimal(item.quantidade)
@@ -106,7 +133,7 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, 
         det = etree.SubElement(inf, "det", nItem=str(indice))
         prod = etree.SubElement(det, "prod")
         cfop = produto.cfop or empresa.cfop_dentro_estado
-        for tag, valor in (("cProd", produto.codigo_interno), ("xProd", produto.descricao), ("NCM", produto.ncm), ("CFOP", cfop), ("uCom", produto.unidade_medida), ("qCom", quantidade), ("vUnCom", unitario), ("vProd", total_item), ("uTrib", produto.unidade_medida), ("qTrib", quantidade), ("vUnTrib", unitario), ("indTot", "1")):
+        for tag, valor in (("cProd", produto.codigo_interno), ("cEAN", "SEM GTIN"), ("xProd", produto.descricao), ("NCM", produto.ncm), ("CFOP", cfop), ("uCom", produto.unidade_medida), ("qCom", quantidade), ("vUnCom", unitario), ("vProd", total_item), ("cEANTrib", "SEM GTIN"), ("uTrib", produto.unidade_medida), ("qTrib", quantidade), ("vUnTrib", unitario), ("indTot", "1")):
             _configurar_elemento(prod, tag, valor)
         imposto = etree.SubElement(det, "imposto")
         icms = etree.SubElement(imposto, "ICMS")
@@ -128,22 +155,40 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, 
     pag = etree.SubElement(inf, "pag")
     det_pag = etree.SubElement(pag, "detPag")
     _configurar_elemento(det_pag, "tPag", "99")
+    _configurar_elemento(det_pag, "xPag", "Pagamento conforme venda registrada no sistema")
     _configurar_elemento(det_pag, "vPag", _decimal(venda.valor_total))
     return raiz, chave, numero, serie
 
 
-def emitir_nfe(venda: Venda, empresa: Empresa, itens: list[tuple[ItemVenda, Produto]]) -> dict[str, Any]:
-    raiz, chave, numero, serie = montar_xml_nfe(venda, empresa, itens)
+def emitir_nfe(venda: Venda, empresa: Empresa, cliente: Cliente | None, itens: list[tuple[ItemVenda, Produto]]) -> dict[str, Any]:
+    ambiente_transmissao = "homologacao"
+    raiz, chave, numero, serie = montar_xml_nfe(venda, empresa, cliente, itens, ambiente_transmissao)
     from pynfe.processamento.assinatura import AssinaturaA1
     from pynfe.processamento.comunicacao import ComunicacaoSefaz
     from pynfe.utils import etree
 
-    assinado = AssinaturaA1(settings.NFE_CERTIFICATE_PATH, settings.NFE_CERTIFICATE_PASSWORD).assinar(raiz)
+    try:
+        assinado = AssinaturaA1(settings.NFE_CERTIFICATE_PATH, settings.NFE_CERTIFICATE_PASSWORD).assinar(raiz)
+    except Exception as exc:
+        mensagem = str(exc)
+        if "senha" in mensagem.lower() or "password" in mensagem.lower() or "pkcs12" in mensagem.lower():
+            raise EmissaoNFeError("A senha do certificado A1 está incorreta ou o arquivo não é um PKCS#12 válido.") from exc
+        raise EmissaoNFeError("Não foi possível assinar o XML da NF-e com o certificado A1.") from exc
     comunicacao = ComunicacaoSefaz("RJ", settings.NFE_CERTIFICATE_PATH, settings.NFE_CERTIFICATE_PASSWORD, homologacao=True)
-    resultado, resposta, *_ = comunicacao.autorizacao(55, assinado, id_lote=venda.id, ind_sinc=1)
+    resultado, resposta, *_ = comunicacao.autorizacao("nfe", assinado, id_lote=venda.id, ind_sinc=1)
     if resultado == 0:
         xml_autorizado = etree.tostring(resposta, encoding="unicode", pretty_print=False)
         return {"status": "autorizada", "chave_acesso": chave, "numero": numero, "serie": serie, "xml_assinado": etree.tostring(assinado, encoding="unicode"), "xml_autorizado": xml_autorizado, "protocolo": resposta.find("{http://www.portalfiscal.inf.br/nfe}protNFe/{http://www.portalfiscal.inf.br/nfe}infProt/{http://www.portalfiscal.inf.br/nfe}nProt").text if resposta.find("{http://www.portalfiscal.inf.br/nfe}protNFe/{http://www.portalfiscal.inf.br/nfe}infProt/{http://www.portalfiscal.inf.br/nfe}nProt") is not None else None}
 
-    mensagem = getattr(resposta, "text", None) or "NF-e rejeitada pela SEFAZ."
-    return {"status": "rejeitada", "chave_acesso": chave, "numero": numero, "serie": serie, "xml_assinado": etree.tostring(assinado, encoding="unicode"), "mensagem_status": mensagem}
+    resposta_xml = resposta
+    if not hasattr(resposta, "xpath"):
+        conteudo_resposta = getattr(resposta, "content", b"") or getattr(resposta, "text", "")
+        try:
+            resposta_xml = etree.fromstring(conteudo_resposta)
+        except Exception:
+            resposta_xml = None
+    status_nodes = resposta_xml.xpath("//*[local-name()='cStat']") if resposta_xml is not None else []
+    motivo_nodes = resposta_xml.xpath("//*[local-name()='xMotivo']") if resposta_xml is not None else []
+    codigo_status = status_nodes[-1].text if status_nodes else None
+    motivo = motivo_nodes[-1].text if motivo_nodes else "NF-e rejeitada pela SEFAZ."
+    return {"status": "rejeitada", "codigo_status": codigo_status, "chave_acesso": chave, "numero": numero, "serie": serie, "xml_assinado": etree.tostring(assinado, encoding="unicode"), "mensagem_status": f"{codigo_status or 'SEFAZ'}: {motivo}"}

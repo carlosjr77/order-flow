@@ -431,36 +431,37 @@ export const ProdutosPage: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">NCM</label>
                   <Input
                     value={formData.ncm}
-                    onChange={(e) => setFormData({ ...formData, ncm: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, ncm: e.target.value.replace(/\D/g, '').slice(0, 8) })}
                     placeholder="12345678"
+                    maxLength={8}
                   />
                 </div>
+              </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  {[
-                    ['cest', 'CEST', 7],
-                    ['cfop', 'CFOP específico', 4],
-                    ['csosn', 'CSOSN específico', 3],
-                  ].map(([name, label, maxLength]) => (
-                    <div key={name}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                      <Input value={String(formData[name as keyof typeof formData] || '')} onChange={(e) => setFormData({ ...formData, [name]: e.target.value })} maxLength={maxLength as number} />
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  ['cest', 'CEST', 7],
+                  ['cfop', 'CFOP específico', 4],
+                  ['csosn', 'CSOSN específico', 3],
+                ].map(([name, label, maxLength]) => (
+                  <div key={name}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                    <Input value={String(formData[name as keyof typeof formData] || '')} onChange={(e) => setFormData({ ...formData, [name]: e.target.value.replace(/\D/g, '').slice(0, maxLength as number) })} maxLength={maxLength as number} />
+                  </div>
+                ))}
+              </div>
 
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  {[
-                    ['aliquota_icms', 'ICMS (%)'],
-                    ['aliquota_pis', 'PIS (%)'],
-                    ['aliquota_cofins', 'COFINS (%)'],
-                  ].map(([name, label]) => (
-                    <div key={name}>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-                      <Input type="number" min="0" max="100" step="0.01" value={Number(formData[name as keyof typeof formData] || 0)} onChange={(e) => setFormData({ ...formData, [name]: Number(e.target.value) })} />
-                    </div>
-                  ))}
-                </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {[
+                  ['aliquota_icms', 'ICMS (%)'],
+                  ['aliquota_pis', 'PIS (%)'],
+                  ['aliquota_cofins', 'COFINS (%)'],
+                ].map(([name, label]) => (
+                  <div key={name}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                    <Input type="number" min="0" max="100" step="0.01" value={Number(formData[name as keyof typeof formData] || 0)} onChange={(e) => setFormData({ ...formData, [name]: Number(e.target.value) })} />
+                  </div>
+                ))}
               </div>
 
               {!editingId && (

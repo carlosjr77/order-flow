@@ -560,13 +560,9 @@ export const VendasPage: React.FC = () => {
                       <DownloadCloud className="w-4 h-4 mr-1" />
                       Baixar PDF
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setDanfeVenda(venda)}>
-                      <Printer className="w-4 h-4 mr-1" />
-                      Ver DANFE
-                    </Button>
                     <Button size="sm" variant="outline" onClick={() => void emitirNFe(venda)} disabled={emittingVendaId === venda.id}>
                       <Printer className="w-4 h-4 mr-1" />
-                      {emittingVendaId === venda.id ? 'Emitindo...' : 'Emitir NF-e'}
+                      {emittingVendaId === venda.id ? 'Emitindo...' : 'Emitir NF-e e gerar DANFE'}
                     </Button>
                     <Button
                       size="sm"

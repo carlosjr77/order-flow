@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import Empresa, ItemVenda, NFe, Produto, Venda
+from app.models import Cliente, Empresa, ItemVenda, NFe, Produto, Venda
 from app.routes.auth import get_current_user
 from app.utils.danfe import DanfeError, gerar_danfe_pdf
 from app.utils.nfe_emissao import EmissaoNFeError, emitir_nfe
@@ -15,36 +15,8 @@ from app.utils.nfe_emissao import EmissaoNFeError, emitir_nfe
 router = APIRouter(prefix="/api/fiscal", tags=["Fiscal"])
 
 
-class DanfeRequest(BaseModel):
-    xml: str = Field(min_length=1)
-
-
 class EmitirNFeRequest(BaseModel):
     venda_id: int = Field(gt=0)
-
-
-@router.post("/danfe/gerar-pdf", response_class=StreamingResponse)
-def gerar_pdf_danfe(
-    payload: DanfeRequest,
-    current_user: dict = Depends(get_current_user),
-):
-    del current_user
-
-    try:
-        pdf, chave = gerar_danfe_pdf(payload.xml)
-    except DanfeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Nao foi possivel gerar a DANFE: O XML da nota fiscal nao foi localizado ou e invalido.",
-        ) from exc
-
-    return StreamingResponse(
-        pdf,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="DANFE-{chave}.pdf"',
-        },
-    )
 
 
 @router.post("/nfe/emitir")
@@ -62,13 +34,26 @@ def emitir_nfe_venda(
         raise HTTPException(status_code=422, detail="Emissão de NF-e está desabilitada no cadastro da empresa.")
     existente = db.query(NFe).filter(NFe.venda_id == venda.id).first()
     if existente and existente.status == "autorizada":
-        raise HTTPException(status_code=409, detail="Esta venda já possui uma NF-e autorizada.")
+        return {
+            "id": existente.id,
+            "venda_id": venda.id,
+            "status": existente.status,
+            "chave_acesso": existente.chave_acesso,
+            "numero": existente.numero,
+            "serie": existente.serie,
+            "danfe_url": f"/api/fiscal/nfe/{venda.id}/danfe",
+        }
 
     itens = db.query(ItemVenda, Produto).join(Produto, ItemVenda.produto_id == Produto.id).filter(ItemVenda.venda_id == venda.id, ItemVenda.deleted_at.is_(None)).all()
+    cliente = db.query(Cliente).filter(Cliente.nome == venda.nome_cliente).first() if venda.nome_cliente else None
     try:
-        resultado = emitir_nfe(venda, empresa, itens)
+        resultado = emitir_nfe(venda, empresa, cliente, itens)
     except EmissaoNFeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=422, detail="Certificado A1 não encontrado no backend.") from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=422, detail="O backend não tem permissão para ler o certificado A1.") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail="Falha de comunicação com a SEFAZ em homologação.") from exc
 

@@ -1,28 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, FileUp, Loader2, Printer, X } from 'lucide-react';
+import { Download, Loader2, Printer, X } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-const DANFE_ERROR = 'Não foi possível gerar a DANFE: O XML da nota fiscal não foi localizado ou é inválido.';
+const DANFE_ERROR = 'Não foi possível gerar a DANFE: a NF-e ainda não foi autorizada ou não está disponível.';
 
 type DanfeViewerDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  xml?: string | null;
-  vendaId?: number | null;
+  vendaId: number | null | undefined;
 };
 
-export const DanfeViewerDialog: React.FC<DanfeViewerDialogProps> = ({ open, onOpenChange, xml, vendaId }) => {
-  const [xmlTexto, setXmlTexto] = useState(xml || '');
+export const DanfeViewerDialog: React.FC<DanfeViewerDialogProps> = ({ open, onOpenChange, vendaId }) => {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState('DANFE.pdf');
   const [isLoading, setIsLoading] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  useEffect(() => {
-    setXmlTexto(xml || '');
-  }, [xml, open]);
 
   useEffect(() => {
     if (!open || !vendaId) return;
@@ -57,41 +51,6 @@ export const DanfeViewerDialog: React.FC<DanfeViewerDialogProps> = ({ open, onOp
     onOpenChange(false);
   };
 
-  const gerarPdf = async (xmlParaGerar = xmlTexto) => {
-    if (!xmlParaGerar.trim()) {
-      alert(DANFE_ERROR);
-      return;
-    }
-
-    setIsLoading(true);
-    limparPdf();
-    try {
-      const resultado = await apiClient.gerarDanfe(xmlParaGerar);
-      setPdfUrl(URL.createObjectURL(resultado.blob));
-      setNomeArquivo(resultado.filename || 'DANFE.pdf');
-    } catch (error) {
-      console.error('Erro ao gerar DANFE:', error);
-      alert(DANFE_ERROR);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const carregarArquivo = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const arquivo = event.target.files?.[0];
-    if (!arquivo) return;
-
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      const conteudo = typeof leitor.result === 'string' ? leitor.result : '';
-      setXmlTexto(conteudo);
-      void gerarPdf(conteudo);
-    };
-    leitor.onerror = () => alert(DANFE_ERROR);
-    leitor.readAsText(arquivo);
-    event.target.value = '';
-  };
-
   const imprimir = () => iframeRef.current?.contentWindow?.print();
 
   const baixar = () => {
@@ -111,31 +70,6 @@ export const DanfeViewerDialog: React.FC<DanfeViewerDialogProps> = ({ open, onOp
             <X className="h-4 w-4" />
           </Button>
         </DialogHeader>
-
-        {!pdfUrl && !isLoading && (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-            <FileUp className="h-10 w-10 text-muted-foreground" />
-            <div>
-              <p className="font-medium">Selecione o XML autorizado da NFe</p>
-              <p className="text-sm text-muted-foreground">O arquivo será enviado ao backend para gerar a DANFE.</p>
-            </div>
-            <label className="cursor-pointer">
-              <span className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-                Escolher XML
-              </span>
-              <input type="file" accept=".xml,text/xml,application/xml" className="sr-only" onChange={carregarArquivo} />
-            </label>
-            <textarea
-              value={xmlTexto}
-              onChange={(event) => setXmlTexto(event.target.value)}
-              placeholder="Ou cole o XML da NFe aqui"
-              className="min-h-32 w-full max-w-2xl rounded-md border bg-background p-3 text-left text-xs"
-            />
-            <Button onClick={() => void gerarPdf()} disabled={!xmlTexto.trim()}>
-              Gerar DANFE
-            </Button>
-          </div>
-        )}
 
         {isLoading && (
           <div className="flex flex-1 items-center justify-center gap-3 text-muted-foreground">
@@ -161,6 +95,12 @@ export const DanfeViewerDialog: React.FC<DanfeViewerDialogProps> = ({ open, onOp
             </div>
             <iframe ref={iframeRef} src={pdfUrl} title="DANFE" className="min-h-0 flex-1 w-full" />
           </>
+        )}
+
+        {!pdfUrl && !isLoading && (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            {DANFE_ERROR}
+          </div>
         )}
       </DialogContent>
     </Dialog>

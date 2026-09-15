@@ -51,7 +51,11 @@ export const EmpresaPage: React.FC = () => {
       const dados = await apiClient.obterDadosEmpresa();
       if (dados) {
         setEmpresa(dados);
-        setFormData({ ...formData, ...dados });
+        setFormData({
+          ...formData,
+          ...dados,
+          emissao_nfe_habilitada: Boolean(Number(dados.emissao_nfe_habilitada)),
+        });
       } else {
         // Sem dados, manter o formulário vazio
         setEmpresa(null);
@@ -85,7 +89,7 @@ export const EmpresaPage: React.FC = () => {
         toast.success('Dados da empresa cadastrados com sucesso!');
       }
 
-      loadEmpresa();
+      await loadEmpresa();
     } catch (error) {
       console.error('Erro ao salvar dados da empresa:', error);
       toast.error('Erro ao salvar dados da empresa');

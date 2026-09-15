@@ -116,6 +116,8 @@ def atualizar_empresa(
     # Atualizar apenas os campos fornecidos
     dados_atualizacao = empresa_data.dict(exclude_unset=True)
     for campo, valor in dados_atualizacao.items():
+        if campo == "emissao_nfe_habilitada":
+            valor = 1 if valor else 0
         setattr(empresa, campo, valor)
     
     db.commit()

@@ -48,7 +48,9 @@ def gerar_danfe_pdf(xml: str) -> tuple[BytesIO, str]:
     except Exception as exc:
         raise DanfeError("Nao foi possivel converter o XML em DANFE.") from exc
 
-    if isinstance(conteudo, str):
+    if isinstance(conteudo, bytearray):
+        conteudo = bytes(conteudo)
+    elif isinstance(conteudo, str):
         conteudo = conteudo.encode("latin-1")
     if not isinstance(conteudo, bytes) or not conteudo:
         raise DanfeError("Nao foi possivel converter o XML em DANFE.")

@@ -235,6 +235,20 @@ class EmpresaUpdate(BaseModel):
     telefone: Optional[str] = None
     email: Optional[str] = None
     margem_lucro_padrao: Optional[float] = None
+    inscricao_estadual: Optional[str] = None
+    regime_tributario: Optional[Literal["simples_nacional", "lucro_presumido", "lucro_real"]] = None
+    cfop_dentro_estado: Optional[str] = None
+    cfop_fora_estado: Optional[str] = None
+    csosn_padrao: Optional[str] = None
+    aliquota_icms: Optional[float] = None
+    aliquota_pis: Optional[float] = None
+    aliquota_cofins: Optional[float] = None
+    serie_nfe: Optional[int] = None
+    numero_nfe: Optional[int] = None
+    ambiente_nfe: Optional[Literal["homologacao", "producao"]] = None
+    emissao_nfe_habilitada: Optional[bool] = None
+    codigo_municipio_ibge: Optional[str] = None
+    codigo_pais: Optional[str] = None
 
 
 class EmpresaResponse(EmpresaBase):
