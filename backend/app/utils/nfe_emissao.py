@@ -30,6 +30,14 @@ def _texto(valor: Any) -> str:
     return "" if valor is None else str(valor)
 
 
+def _texto_fiscal(valor: Any, limite: int) -> str:
+    """Normaliza texto livre para os campos de texto do XML fiscal."""
+    texto = "" if valor is None else str(valor)
+    texto = " ".join(texto.split())
+    texto = "".join(caractere for caractere in texto if caractere.isprintable())
+    return texto[:limite]
+
+
 def _preparar_certificado_a1() -> tuple[str, str | None]:
     """Aceita certificado PKCS#12 binário ou Base64 em secret file do Render."""
     caminho = settings.NFE_CERTIFICATE_PATH
@@ -133,7 +141,7 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, cliente: Cliente | None, iten
     for tag, valor in (("CNPJ", _numeros(empresa.cnpj)), ("xNome", empresa.nome), ("xFant", empresa.nome)):
         _configurar_elemento(emit, tag, valor)
     endereco = etree.SubElement(emit, "enderEmit")
-    for tag, valor in (("xLgr", empresa.endereco), ("nro", empresa.numero), ("xBairro", empresa.bairro), ("cMun", empresa.codigo_municipio_ibge), ("xMun", empresa.cidade), ("UF", empresa.estado.upper()), ("CEP", _numeros(empresa.cep)), ("cPais", empresa.codigo_pais), ("xPais", "BRASIL")):
+    for tag, valor in (("xLgr", _texto_fiscal(empresa.endereco, 60)), ("nro", _texto_fiscal(empresa.numero, 60)), ("xBairro", _texto_fiscal(empresa.bairro, 60)), ("cMun", empresa.codigo_municipio_ibge), ("xMun", _texto_fiscal(empresa.cidade, 60)), ("UF", empresa.estado.upper()), ("CEP", _numeros(empresa.cep)), ("cPais", empresa.codigo_pais), ("xPais", "BRASIL")):
         _configurar_elemento(endereco, tag, valor)
     _configurar_elemento(emit, "IE", _numeros(empresa.inscricao_estadual))
     _configurar_elemento(emit, "CRT", "1" if empresa.regime_tributario == "simples_nacional" else "3")
@@ -150,7 +158,7 @@ def montar_xml_nfe(venda: Venda, empresa: Empresa, cliente: Cliente | None, iten
     _configurar_elemento(dest, "xNome", nome_destinatario)
     endereco_dest = etree.SubElement(dest, "enderDest")
     codigo_municipio_destino = getattr(cliente, "codigo_municipio_ibge", None) or empresa.codigo_municipio_ibge
-    for tag, valor in (("xLgr", cliente.endereco), ("nro", cliente.numero), ("xBairro", cliente.bairro), ("cMun", codigo_municipio_destino), ("xMun", cliente.cidade), ("UF", cliente.estado.upper()), ("CEP", _numeros(cliente.cep)), ("cPais", empresa.codigo_pais), ("xPais", "BRASIL")):
+    for tag, valor in (("xLgr", _texto_fiscal(cliente.endereco, 60)), ("nro", _texto_fiscal(cliente.numero, 60)), ("xBairro", _texto_fiscal(cliente.bairro, 60)), ("cMun", codigo_municipio_destino), ("xMun", _texto_fiscal(cliente.cidade, 60)), ("UF", cliente.estado.upper()), ("CEP", _numeros(cliente.cep)), ("cPais", empresa.codigo_pais), ("xPais", "BRASIL")):
         _configurar_elemento(endereco_dest, tag, valor)
     _configurar_elemento(dest, "indIEDest", "9")
     if cliente.email:
