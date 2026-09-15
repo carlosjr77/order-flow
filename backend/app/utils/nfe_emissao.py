@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 import os
 import re
+import tempfile
 from typing import Any
 
 from app.core.config import settings
@@ -26,6 +28,36 @@ def _decimal(valor: Any) -> Decimal:
 
 def _texto(valor: Any) -> str:
     return "" if valor is None else str(valor)
+
+
+def _preparar_certificado_a1() -> tuple[str, str | None]:
+    """Aceita certificado PKCS#12 binário ou Base64 em secret file do Render."""
+    caminho = settings.NFE_CERTIFICATE_PATH
+    try:
+        conteudo = open(caminho, "rb").read()
+    except OSError as exc:
+        raise EmissaoNFeError("Não foi possível ler o certificado A1 no backend.") from exc
+
+    if conteudo.startswith(b"0"):
+        return caminho, None
+
+    try:
+        decodificado = base64.b64decode(b"".join(conteudo.split()), validate=True)
+    except Exception as exc:
+        raise EmissaoNFeError("O arquivo do certificado A1 não é um PKCS#12 binário nem um Base64 válido.") from exc
+
+    if not decodificado:
+        raise EmissaoNFeError("O arquivo do certificado A1 está vazio.")
+
+    temporario = tempfile.NamedTemporaryFile(prefix="nfe-certificate-", suffix=".pfx", delete=False)
+    try:
+        temporario.write(decodificado)
+        temporario.close()
+    except Exception:
+        temporario.close()
+        os.unlink(temporario.name)
+        raise
+    return temporario.name, temporario.name
 
 
 def _chave_nfe(empresa: Empresa, venda: Venda, numero: int, serie: int) -> str:
@@ -167,15 +199,23 @@ def emitir_nfe(venda: Venda, empresa: Empresa, cliente: Cliente | None, itens: l
     from pynfe.processamento.comunicacao import ComunicacaoSefaz
     from pynfe.utils import etree
 
+    caminho_certificado, temporario = _preparar_certificado_a1()
     try:
-        assinado = AssinaturaA1(settings.NFE_CERTIFICATE_PATH, settings.NFE_CERTIFICATE_PASSWORD).assinar(raiz)
-    except Exception as exc:
-        mensagem = str(exc)
-        if "senha" in mensagem.lower() or "password" in mensagem.lower() or "pkcs12" in mensagem.lower():
-            raise EmissaoNFeError("A senha do certificado A1 está incorreta ou o arquivo não é um PKCS#12 válido.") from exc
-        raise EmissaoNFeError("Não foi possível assinar o XML da NF-e com o certificado A1.") from exc
-    comunicacao = ComunicacaoSefaz("RJ", settings.NFE_CERTIFICATE_PATH, settings.NFE_CERTIFICATE_PASSWORD, homologacao=True)
-    resultado, resposta, *_ = comunicacao.autorizacao("nfe", assinado, id_lote=venda.id, ind_sinc=1)
+        try:
+            assinado = AssinaturaA1(caminho_certificado, settings.NFE_CERTIFICATE_PASSWORD).assinar(raiz)
+        except Exception as exc:
+            mensagem = str(exc)
+            if "senha" in mensagem.lower() or "password" in mensagem.lower() or "pkcs12" in mensagem.lower():
+                raise EmissaoNFeError("A senha do certificado A1 está incorreta ou o arquivo não é um PKCS#12 válido.") from exc
+            raise EmissaoNFeError("Não foi possível assinar o XML da NF-e com o certificado A1.") from exc
+        comunicacao = ComunicacaoSefaz("RJ", caminho_certificado, settings.NFE_CERTIFICATE_PASSWORD, homologacao=True)
+        resultado, resposta, *_ = comunicacao.autorizacao("nfe", assinado, id_lote=venda.id, ind_sinc=1)
+    finally:
+        if temporario:
+            try:
+                os.unlink(temporario)
+            except OSError:
+                pass
     if resultado == 0:
         xml_autorizado = etree.tostring(resposta, encoding="unicode", pretty_print=False)
         return {"status": "autorizada", "chave_acesso": chave, "numero": numero, "serie": serie, "xml_assinado": etree.tostring(assinado, encoding="unicode"), "xml_autorizado": xml_autorizado, "protocolo": resposta.find("{http://www.portalfiscal.inf.br/nfe}protNFe/{http://www.portalfiscal.inf.br/nfe}infProt/{http://www.portalfiscal.inf.br/nfe}nProt").text if resposta.find("{http://www.portalfiscal.inf.br/nfe}protNFe/{http://www.portalfiscal.inf.br/nfe}infProt/{http://www.portalfiscal.inf.br/nfe}nProt") is not None else None}
