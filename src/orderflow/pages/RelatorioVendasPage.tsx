@@ -322,6 +322,7 @@ export const RelatorioVendasPage: React.FC = () => {
             acc[key] = {
               produtoId: key,
               descricao: item.descricao || `Produto ${key}`,
+              unidade_medida: item.unidade_medida || 'UN',
               quantidade: 0,
               faturamento: 0,
               custo: 0,
@@ -344,6 +345,7 @@ export const RelatorioVendasPage: React.FC = () => {
       {} as Record<number, {
         produtoId: number;
         descricao: string;
+        unidade_medida: string;
         quantidade: number;
         faturamento: number;
         custo: number;
@@ -386,6 +388,11 @@ export const RelatorioVendasPage: React.FC = () => {
       .sort((a, b) => b.lucro - a.lucro)
       .slice(0, 8);
 
+    const produtosConsolidados = Object.values(produtosAgg)
+      .sort((a, b) => b.faturamento - a.faturamento);
+    const totalItensVendidos = produtosConsolidados.reduce((acc, produto) => acc + produto.quantidade, 0);
+    const totalFaturamentoItens = produtosConsolidados.reduce((acc, produto) => acc + produto.faturamento, 0);
+
     const statusData = Object.values(statusAgg).sort((a, b) => b.valor - a.valor);
     const pagamentoData = Object.values(pagamentoAgg).sort((a, b) => b.valor - a.valor).slice(0, 8);
     const rankingOperadores = Object.values(operadorAgg).sort((a, b) => b.faturamento - a.faturamento);
@@ -414,6 +421,9 @@ export const RelatorioVendasPage: React.FC = () => {
       pagamentoData,
       rankingOperadores,
       topProdutos,
+      produtosConsolidados,
+      totalItensVendidos,
+      totalFaturamentoItens,
       serieDiaria,
       valorCancelado,
       quantidadeCanceladas: vendasCanceladas.length,
@@ -703,6 +713,58 @@ export const RelatorioVendasPage: React.FC = () => {
                 </div>
               </Card>
             </div>
+
+            <Card className="border-slate-200 p-5 overflow-x-auto">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Resumo dos itens vendidos no período</h3>
+                  <p className="text-xs text-slate-500 mt-1">Consolidado por produto, independente da venda de origem.</p>
+                </div>
+                <div className="flex gap-3 text-sm">
+                  <span className="rounded-md bg-blue-50 px-3 py-2 font-semibold text-blue-700">
+                    {dadosCalculados.totalItensVendidos.toFixed(3)} itens
+                  </span>
+                  <span className="rounded-md bg-emerald-50 px-3 py-2 font-semibold text-emerald-700">
+                    {formatCurrency(dadosCalculados.totalFaturamentoItens)}
+                  </span>
+                </div>
+              </div>
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-600">
+                    <th className="text-left py-2">Código</th>
+                    <th className="text-left py-2">Produto</th>
+                    <th className="text-left py-2">Un.</th>
+                    <th className="text-right py-2">Quantidade</th>
+                    <th className="text-right py-2">Valor total</th>
+                    <th className="text-right py-2">Custo</th>
+                    <th className="text-right py-2">Lucro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dadosCalculados.produtosConsolidados.map((produto) => (
+                    <tr key={produto.produtoId} className="border-b border-slate-100">
+                      <td className="py-2 text-slate-600">{produto.produtoId}</td>
+                      <td className="py-2 font-medium text-slate-800">{produto.descricao}</td>
+                      <td className="py-2 text-slate-600">{produto.unidade_medida || 'UN'}</td>
+                      <td className="py-2 text-right font-bold text-blue-700">{produto.quantidade.toFixed(3)}</td>
+                      <td className="py-2 text-right font-bold text-emerald-700">{formatCurrency(produto.faturamento)}</td>
+                      <td className="py-2 text-right text-slate-600">{formatCurrency(produto.custo)}</td>
+                      <td className="py-2 text-right font-semibold text-slate-800">{formatCurrency(produto.lucro)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                    <td colSpan={3} className="py-3 text-slate-900">Total geral</td>
+                    <td className="py-3 text-right text-blue-700">{dadosCalculados.totalItensVendidos.toFixed(3)}</td>
+                    <td className="py-3 text-right text-emerald-700">{formatCurrency(dadosCalculados.totalFaturamentoItens)}</td>
+                    <td className="py-3 text-right">{formatCurrency(dadosCalculados.totalCusto)}</td>
+                    <td className="py-3 text-right">{formatCurrency(dadosCalculados.lucroBruto)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </Card>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
               <Card className="p-5 border-slate-200">
