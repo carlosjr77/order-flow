@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CalendarRange,
   CircleDollarSign,
+  Download,
   Package,
   Percent,
   RefreshCw,
@@ -30,6 +31,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '../services/api';
 import { Venda } from '../types';
+import { gerarRelatorioVendasPdf } from '../utils/gerarRelatorioVendas';
 
 type PresetPeriodo = '7d' | '30d' | 'mes' | 'custom';
 
@@ -123,6 +125,10 @@ export const RelatorioVendasPage: React.FC = () => {
     inicio: '',
     fim: '',
     preset: '30d' as PresetPeriodo,
+  });
+  const [filtrosAplicados, setFiltrosAplicados] = useState({
+    status: 'todos' as 'todos' | 'concluído' | 'pendente' | 'cancelado',
+    operador: 'todos',
   });
 
   useEffect(() => {
@@ -227,7 +233,26 @@ export const RelatorioVendasPage: React.FC = () => {
 
     setVendasDetalhadas(vendasFiltradas);
     setUltimoPeriodoAplicado({ inicio, fim, preset: presetPeriodo });
+    setFiltrosAplicados({ status, operador });
     setIsAplicandoFiltro(false);
+  };
+
+  const exportarRelatorioPdf = () => {
+    if (!dataInicio || !dataFim) {
+      setErro('Aplique um período antes de exportar o relatório.');
+      return;
+    }
+
+    const pdf = gerarRelatorioVendasPdf({
+      vendas: vendasDetalhadas,
+      dataInicio: ultimoPeriodoAplicado.inicio || dataInicio,
+      dataFim: ultimoPeriodoAplicado.fim || dataFim,
+      status: filtrosAplicados.status === 'todos' ? 'Todos' : filtrosAplicados.status,
+      operador: filtrosAplicados.operador === 'todos' ? 'Todos' : filtrosAplicados.operador,
+      incluirCanceladasNosIndicadores,
+      indicadores: dadosCalculados,
+    });
+    pdf.save(`Relatorio_Vendas_${dataInicio}_${dataFim}.pdf`);
   };
 
   const dadosCalculados = useMemo(() => {
@@ -566,6 +591,14 @@ export const RelatorioVendasPage: React.FC = () => {
                 disabled={isLoading || isAplicandoFiltro}
               >
                 {isAplicandoFiltro ? 'Aplicando...' : 'Aplicar filtros'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={exportarRelatorioPdf}
+                disabled={isLoading || isAplicandoFiltro || vendasDetalhadas.length === 0}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Exportar PDF completo
               </Button>
             </div>
           </div>
