@@ -56,6 +56,39 @@ const normalizarStatus = (status?: string) => {
   return status.toLowerCase() === 'concluido' ? 'concluído' : status;
 };
 
+const consolidarProdutos = (vendas: VendaRelatorio[]) => {
+  const produtos = new Map<number, {
+    produtoId: number;
+    codigo: string;
+    descricao: string;
+    unidade: string;
+    quantidade: number;
+    total: number;
+    custo: number;
+  }>();
+
+  vendas.forEach((venda) => {
+    (venda.itens || []).forEach((item) => {
+      const produtoAtual = produtos.get(item.produto_id) || {
+        produtoId: item.produto_id,
+        codigo: item.codigo_interno || String(item.produto_id),
+        descricao: item.descricao || `Produto ${item.produto_id}`,
+        unidade: item.unidade_medida || 'UN',
+        quantidade: 0,
+        total: 0,
+        custo: 0,
+      };
+      const quantidade = Number(item.quantidade || 0);
+      produtoAtual.quantidade += quantidade;
+      produtoAtual.total += Number(item.valor_total || 0);
+      produtoAtual.custo += Number(item.preco_custo || 0) * quantidade;
+      produtos.set(item.produto_id, produtoAtual);
+    });
+  });
+
+  return Array.from(produtos.values()).sort((a, b) => b.total - a.total);
+};
+
 const adicionarRodape = (doc: DocumentoComTabela) => {
   const paginas = doc.getNumberOfPages();
   for (let pagina = 1; pagina <= paginas; pagina += 1) {
@@ -132,6 +165,45 @@ export const gerarRelatorioVendasPdf = (dados: DadosRelatorioVendasPdf): jsPDF =
     headStyles: { fillColor: [15, 118, 110] },
     styles: { fontSize: 6.5, cellPadding: 1.5, overflow: 'linebreak' },
     columnStyles: { 0: { cellWidth: 12 }, 6: { halign: 'right', cellWidth: 11 }, 7: { halign: 'right', cellWidth: 21 }, 8: { halign: 'right', cellWidth: 19 } },
+  });
+
+  proximaLinha = (doc.lastAutoTable?.finalY || proximaLinha) + 8;
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(15, 23, 42);
+  doc.text('Consolidado por produto (todas as vendas filtradas)', 14, proximaLinha);
+  proximaLinha += 4;
+
+  const produtosConsolidados = consolidarProdutos(dados.vendas);
+  autoTable(doc, {
+    startY: proximaLinha,
+    head: [['Código', 'Produto', 'Un.', 'Quantidade total', 'Valor total vendido', 'Custo', 'Lucro']],
+    body: produtosConsolidados.length > 0
+      ? produtosConsolidados.map((produto) => [
+        produto.codigo,
+        produto.descricao,
+        produto.unidade,
+        produto.quantidade.toFixed(3),
+        formatarMoeda(produto.total),
+        formatarMoeda(produto.custo),
+        formatarMoeda(produto.total - produto.custo),
+      ])
+      : [['-', 'Nenhum produto encontrado', '-', '-', '-', '-', '-']],
+    theme: 'grid',
+    headStyles: { fillColor: [124, 58, 237], textColor: 255 },
+    styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+    columnStyles: {
+      2: { cellWidth: 12 },
+      3: { halign: 'right', cellWidth: 27, fontStyle: 'bold', textColor: [30, 64, 175] },
+      4: { halign: 'right', cellWidth: 30, fontStyle: 'bold', textColor: [22, 101, 52] },
+      5: { halign: 'right', cellWidth: 25 },
+      6: { halign: 'right', cellWidth: 25, fontStyle: 'bold' },
+    },
+    didParseCell: (hookData) => {
+      if (hookData.section === 'body' && (hookData.column.index === 3 || hookData.column.index === 4)) {
+        hookData.cell.styles.fillColor = hookData.column.index === 3 ? [239, 246, 255] : [240, 253, 244];
+      }
+    },
   });
 
   proximaLinha = (doc.lastAutoTable?.finalY || proximaLinha) + 8;
