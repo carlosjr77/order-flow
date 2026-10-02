@@ -61,6 +61,11 @@ const formatCurrency = (value: number) =>
     currency: 'BRL',
   }).format(Number.isFinite(value) ? value : 0);
 
+const formatQuantity = (value: number, unit?: string) =>
+  new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: unit?.trim().toUpperCase() === 'UN' ? 0 : 2,
+  }).format(Number.isFinite(value) ? value : 0);
+
 const formatPercent = (value: number) => `${value.toFixed(2)}%`;
 
 const toInputDate = (date: Date) => {
@@ -173,7 +178,7 @@ export const RelatorioVendasPage: React.FC = () => {
     try {
       setErro('');
       setIsLoading(true);
-      const data = (await apiClient.listarVendas(0, 2000, undefined, true, true)) as VendaDetalhada[];
+      const data = (await apiClient.listarVendas(0, 2000, undefined, false, true)) as VendaDetalhada[];
       const ordenadas = data.sort((a, b) => getDataReferenciaVenda(b).getTime() - getDataReferenciaVenda(a).getTime());
       setVendas(ordenadas);
       aplicarFiltros(
@@ -722,7 +727,7 @@ export const RelatorioVendasPage: React.FC = () => {
                 </div>
                 <div className="flex gap-3 text-sm">
                   <span className="rounded-md bg-blue-50 px-3 py-2 font-semibold text-blue-700">
-                    {dadosCalculados.totalItensVendidos.toFixed(3)} itens
+                    {formatQuantity(dadosCalculados.totalItensVendidos)} itens
                   </span>
                   <span className="rounded-md bg-emerald-50 px-3 py-2 font-semibold text-emerald-700">
                     {formatCurrency(dadosCalculados.totalFaturamentoItens)}
@@ -747,7 +752,9 @@ export const RelatorioVendasPage: React.FC = () => {
                       <td className="py-2 text-slate-600">{produto.produtoId}</td>
                       <td className="py-2 font-medium text-slate-800">{produto.descricao}</td>
                       <td className="py-2 text-slate-600">{produto.unidade_medida || 'UN'}</td>
-                      <td className="py-2 text-right font-bold text-blue-700">{produto.quantidade.toFixed(3)}</td>
+                      <td className="py-2 text-right font-bold text-blue-700">
+                        {formatQuantity(produto.quantidade, produto.unidade_medida)}
+                      </td>
                       <td className="py-2 text-right font-bold text-emerald-700">{formatCurrency(produto.faturamento)}</td>
                       <td className="py-2 text-right text-slate-600">{formatCurrency(produto.custo)}</td>
                       <td className="py-2 text-right font-semibold text-slate-800">{formatCurrency(produto.lucro)}</td>
@@ -757,7 +764,9 @@ export const RelatorioVendasPage: React.FC = () => {
                 <tfoot>
                   <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
                     <td colSpan={3} className="py-3 text-slate-900">Total geral</td>
-                    <td className="py-3 text-right text-blue-700">{dadosCalculados.totalItensVendidos.toFixed(3)}</td>
+                    <td className="py-3 text-right text-blue-700">
+                      {formatQuantity(dadosCalculados.totalItensVendidos)}
+                    </td>
                     <td className="py-3 text-right text-emerald-700">{formatCurrency(dadosCalculados.totalFaturamentoItens)}</td>
                     <td className="py-3 text-right">{formatCurrency(dadosCalculados.totalCusto)}</td>
                     <td className="py-3 text-right">{formatCurrency(dadosCalculados.lucroBruto)}</td>
