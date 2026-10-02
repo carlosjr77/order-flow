@@ -394,7 +394,7 @@ export const RelatorioVendasPage: React.FC = () => {
       .slice(0, 8);
 
     const produtosConsolidados = Object.values(produtosAgg)
-      .sort((a, b) => b.faturamento - a.faturamento);
+      .sort((a, b) => b.quantidade - a.quantidade || b.faturamento - a.faturamento);
     const totalItensVendidos = produtosConsolidados.reduce((acc, produto) => acc + produto.quantidade, 0);
     const totalFaturamentoItens = produtosConsolidados.reduce((acc, produto) => acc + produto.faturamento, 0);
 

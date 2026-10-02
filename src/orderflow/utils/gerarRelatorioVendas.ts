@@ -86,7 +86,8 @@ const consolidarProdutos = (vendas: VendaRelatorio[]) => {
     });
   });
 
-  return Array.from(produtos.values()).sort((a, b) => b.total - a.total);
+  return Array.from(produtos.values())
+    .sort((a, b) => b.quantidade - a.quantidade || b.total - a.total);
 };
 
 const adicionarRodape = (doc: DocumentoComTabela) => {
