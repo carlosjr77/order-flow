@@ -1,4 +1,14 @@
-import { CriarUsuarioData, AtualizarUsuarioData, TrocaSenhaData } from '../types';
+import {
+  CriarUsuarioData,
+  AtualizarUsuarioData,
+  TrocaSenhaData,
+  ExtratoCliente,
+  FiltrosTitulos,
+  NovoRecebimento,
+  PaginaTitulos,
+  PaginaVendasSemCliente,
+  RecebimentoFinanceiro,
+} from '../types';
 
 // API Configuration
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -184,6 +194,42 @@ export class APIClient {
 
   async editarVenda(id: number, data: any) {
     return this.request(`/api/vendas/${id}`, 'PUT', data);
+  }
+
+  // Financeiro endpoints
+  async buscarTitulos(filtros: FiltrosTitulos): Promise<PaginaTitulos> {
+    const params = new URLSearchParams();
+    Object.entries(filtros).forEach(([chave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') params.append(chave, String(valor));
+    });
+    return this.request(`/api/financeiro/titulos?${params}`, 'GET');
+  }
+
+  async registrarRecebimento(dados: NovoRecebimento): Promise<RecebimentoFinanceiro> {
+    return this.request('/api/financeiro/recebimentos', 'POST', dados);
+  }
+
+  async alocarRecebimento(
+    recebimentoId: number,
+    alocacoes: NovoRecebimento['alocacoes']
+  ): Promise<RecebimentoFinanceiro> {
+    return this.request(`/api/financeiro/recebimentos/${recebimentoId}/alocacoes`, 'POST', { alocacoes });
+  }
+
+  async estornarRecebimento(recebimentoId: number, motivo: string): Promise<RecebimentoFinanceiro> {
+    return this.request(`/api/financeiro/recebimentos/${recebimentoId}/estornar`, 'POST', { motivo });
+  }
+
+  async obterExtratoCliente(clienteId: number): Promise<ExtratoCliente> {
+    return this.request(`/api/financeiro/clientes/${clienteId}/extrato`, 'GET');
+  }
+
+  async listarVendasSemCliente(pagina = 1, limite = 50): Promise<PaginaVendasSemCliente> {
+    return this.request(`/api/financeiro/vendas-sem-cliente?pagina=${pagina}&limite=${limite}`, 'GET');
+  }
+
+  async vincularVendaCliente(vendaId: number, clienteId: number) {
+    return this.request(`/api/financeiro/vendas/${vendaId}/cliente`, 'PUT', { cliente_id: clienteId });
   }
 
   // Empresas endpoints

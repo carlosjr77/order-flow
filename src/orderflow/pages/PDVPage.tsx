@@ -11,6 +11,7 @@ import { useDebounce } from '../hooks/useDebounce';
 import { aplicarMascaraCep, aplicarMascaraDocumento, aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
 import { formatarDocumento, formatarTelefone } from '../utils/validacoes';
 import { calcularPrecoVenda } from '../utils/precoDinamico';
+import { mensagemErroApi } from '../utils/financeiro';
 import { SugestaoTabelaModal } from '../components/SugestaoTabelaModal';
 import { DanfeViewerDialog } from '../components/DanfeViewerDialog';
 
@@ -54,6 +55,8 @@ export const PDVPage: React.FC = () => {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null);
+  // Vínculo original da venda em edição: mantido enquanto o nome do cliente não mudar.
+  const [vinculoOriginal, setVinculoOriginal] = useState<{ clienteId: number; nome: string } | null>(null);
   const [showListaClientes, setShowListaClientes] = useState(false);
   const [showDadosCliente, setShowDadosCliente] = useState(false);
   const [dadosCliente, setDadosCliente] = useState({
@@ -126,6 +129,7 @@ export const PDVPage: React.FC = () => {
         setDadosCliente({ nome: venda.nome_cliente, documento: '' });
         setShowDadosCliente(true);
       }
+      setVinculoOriginal(venda.cliente_id ? { clienteId: venda.cliente_id, nome: venda.nome_cliente || '' } : null);
 
       // Preencher tabela de preços utilizada na venda
       setTabelaPrecoSelecionadaId(venda.tabela_preco_id ?? null);
@@ -607,6 +611,8 @@ export const PDVPage: React.FC = () => {
 
       const valorFreteNum = extrairValorMoeda(precoFreteFormatado) || 0;
       const nomeCliente = clienteSelecionado?.nome || (showDadosCliente && dadosCliente.nome ? dadosCliente.nome : null);
+      const clienteId = clienteSelecionado?.id
+        ?? (vinculoOriginal && vinculoOriginal.nome === nomeCliente ? vinculoOriginal.clienteId : null);
 
       let venda: Venda;
 
@@ -618,6 +624,7 @@ export const PDVPage: React.FC = () => {
           observacoes: observacoes || null,
           valor_frete: valorFreteNum,
           nome_cliente: nomeCliente,
+          cliente_id: clienteId,
           tabela_preco_id: tabelaPrecoSelecionadaId,
           data_entrega: dataEntrega ? dataEntrega : null,
           data_vencimento: dataVencimento ? dataVencimento : null,
@@ -631,6 +638,7 @@ export const PDVPage: React.FC = () => {
           observacoes: observacoes || null,
           valor_frete: valorFreteNum,
           nome_cliente: nomeCliente,
+          cliente_id: clienteId,
           tabela_preco_id: tabelaPrecoSelecionadaId,
           data_entrega: dataEntrega ? dataEntrega : null,
           data_vencimento: dataVencimento ? dataVencimento : null,
@@ -685,6 +693,7 @@ export const PDVPage: React.FC = () => {
       setDataEntrega('');
       setDataVencimento('');
       setClienteSelecionado(null);
+      setVinculoOriginal(null);
       setBuscaCliente('');
       setDadosCliente({ nome: '', documento: '' });
       setTabelaPrecoSelecionadaId(null);
@@ -714,7 +723,7 @@ export const PDVPage: React.FC = () => {
             errorMsg = jsonError.message;
           }
         } catch {
-          errorMsg = error.message;
+          errorMsg = mensagemErroApi(error);
         }
       } else if (error.detail) {
         errorMsg = error.detail;

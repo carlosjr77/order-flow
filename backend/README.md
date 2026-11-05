@@ -35,6 +35,15 @@ Este é o backend da aplicação Order Flow, desenvolvido em Python com FastAPI.
 
 A API estará disponível em `http://localhost:8000`
 
+## Testes
+
+Use Python 3.11 e um Postgres só para testes. O nome do banco precisa conter `test`, e os testes apagam todos os dados dele a cada execução.
+
+```bash
+pip install -r requirements-dev.txt
+TEST_DATABASE_URL=postgresql://usuario:senha@localhost:5432/orderflow_test python -m pytest tests -p no:cacheprovider
+```
+
 ## Credenciais Padrão
 
 - **Username**: admin

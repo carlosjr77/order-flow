@@ -77,10 +77,122 @@ export interface Venda {
   observacoes?: string;
   nome_cliente?: string;
   tabela_preco_id?: number | null;
+  cliente_id?: number | null;
   motivo_cancelamento?: string;
   itens?: ItemVenda[];
+  valor_pago?: number | null;
+  saldo?: number | null;
+  status_financeiro?: StatusFinanceiro | null;
   created_at: string;
   updated_at: string;
+}
+
+export type StatusFinanceiro = 'aberto' | 'parcial' | 'liquidada';
+export type OrigemRecebimento = 'avulso' | 'conclusao' | 'migracao';
+export type TipoDataFiltro = 'emissao' | 'vencimento';
+
+export interface TituloFinanceiro {
+  venda_id: number;
+  numero_nfe: number | null;
+  descricao: string;
+  cliente_id: number | null;
+  cliente_nome: string | null;
+  cliente_documento: string | null;
+  data_emissao: string | null;
+  data_vencimento: string | null;
+  valor_original: number;
+  valor_pago: number;
+  saldo: number;
+  status_financeiro: StatusFinanceiro;
+}
+
+export interface FiltrosTitulos {
+  busca?: string;
+  cliente_id?: number;
+  status?: StatusFinanceiro;
+  tipo_data?: TipoDataFiltro;
+  data_inicio?: string;
+  data_fim?: string;
+  pagina?: number;
+  limite?: number;
+}
+
+export interface PaginaTitulos {
+  itens: TituloFinanceiro[];
+  total: number;
+  pagina: number;
+  limite: number;
+  totais: { valor_original: number; valor_pago: number; saldo: number };
+}
+
+export interface AlocacaoRecebimento {
+  venda_id: number;
+  valor: number;
+}
+
+export interface RecebimentoFinanceiro {
+  id: number;
+  cliente_id: number | null;
+  data_pagamento: string;
+  forma_pagamento: string;
+  valor_total: number;
+  origem: OrigemRecebimento;
+  observacoes: string | null;
+  valor_disponivel: number;
+  alocacoes: AlocacaoRecebimento[];
+  estornado_em: string | null;
+  motivo_estorno: string | null;
+}
+
+export interface TituloExtrato {
+  venda_id: number;
+  numero_nfe: number | null;
+  descricao: string;
+  data_emissao: string | null;
+  data_vencimento: string | null;
+  valor_original: number;
+  valor_pago: number;
+  saldo: number;
+  status_financeiro: StatusFinanceiro;
+}
+
+export interface ExtratoCliente {
+  cliente: { id: number; nome: string; documento: string | null; telefone: string | null };
+  resumo: {
+    total_bruto: number;
+    total_em_aberto: number;
+    total_recebido: number;
+    total_recebido_avulso: number;
+    credito_disponivel: number;
+    saldo_liquido: number;
+  };
+  titulos: TituloExtrato[];
+  recebimentos: RecebimentoFinanceiro[];
+  gerado_em: string;
+}
+
+export interface NovoRecebimento {
+  cliente_id: number;
+  data_pagamento: string;
+  forma_pagamento: string;
+  valor_total: string;
+  observacoes?: string | null;
+  alocacoes: Array<{ venda_id: number; valor: string }>;
+}
+
+export interface VendaSemCliente {
+  venda_id: number;
+  nome_cliente: string | null;
+  data_emissao: string | null;
+  valor_total: number;
+  status: string;
+}
+
+export interface PaginaVendasSemCliente {
+  itens: VendaSemCliente[];
+  total: number;
+  pagina: number;
+  limite: number;
 }
 
 export interface EstatisticasVendas {

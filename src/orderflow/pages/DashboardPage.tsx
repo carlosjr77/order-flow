@@ -5,7 +5,7 @@ import { apiClient } from '../services/api';
 import { Produto, Venda } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList, CircleDollarSign, Tag } from 'lucide-react';
+import { ChevronRight, Package, ShoppingCart, BarChart3, LogOut, Settings, Users, AlertTriangle, Shield, ClipboardList, CircleDollarSign, Tag, Wallet } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { usuario, logout, isAdmin } = useAuth();
@@ -148,6 +148,13 @@ export const DashboardPage: React.FC = () => {
             icon={<BarChart3 className="w-8 h-8" />}
             onClick={() => navigate('/vendas')}
             color="bg-purple-50 hover:bg-purple-100"
+          />
+          <QuickAccessCard
+            title="Financeiro"
+            description="Títulos, recebimentos e extrato do cliente"
+            icon={<Wallet className="w-8 h-8" />}
+            onClick={() => navigate('/financeiro')}
+            color="bg-emerald-50 hover:bg-emerald-100"
           />
           <QuickAccessCard
             title="Relatório de Vendas"

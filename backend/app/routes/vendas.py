@@ -6,8 +6,9 @@ from decimal import Decimal
 from pydantic import BaseModel
 from app.core.database import get_db
 from app.routes.auth import get_current_user
-from app.models import Venda, ItemVenda, Produto, Usuario
+from app.models import Cliente, Venda, ItemVenda, Produto, Usuario
 from app.schemas import VendaCreate, VendaUpdate, VendaResponse, VendaDetailResponse
+from app.utils import financeiro
 from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/vendas", tags=["Vendas"])
@@ -18,10 +19,22 @@ def get_usuario_logado(db: Session, current_user: dict) -> Usuario:
     return db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
 
 
+def dados_financeiros(venda: Venda, valor_pago: Decimal) -> dict:
+    """Campos financeiros de uma venda. Venda cancelada ou excluída não tem saldo a cobrar."""
+    if not financeiro.venda_em_aberto_elegivel(venda):
+        return {"valor_pago": None, "saldo": None, "status_financeiro": None}
+    total = financeiro.centavos(venda.valor_total)
+    return {
+        "valor_pago": valor_pago,
+        "saldo": total - valor_pago,
+        "status_financeiro": financeiro.status_financeiro(total, valor_pago),
+    }
+
+
 def venda_to_dict(venda: Venda, db: Session) -> dict:
     """Converte uma venda em dicionário incluindo nome do usuário"""
     data = {column.name: getattr(venda, column.name) for column in venda.__table__.columns}
-    
+
     # Buscar nome do usuário que registrou a venda
     if venda.usuario_id:
         usuario = db.query(Usuario).filter(Usuario.id == venda.usuario_id).first()
@@ -89,10 +102,13 @@ def listar_vendas(
 
         itens_por_venda.setdefault(item.venda_id, []).append(item_dict)
     
+    pagos = financeiro.mapa_pagos(db, venda_ids)
+
     resultado = []
     for venda in vendas:
         resultado.append({
             **venda_to_dict(venda, db),
+            **dados_financeiros(venda, pagos.get(venda.id, financeiro.ZERO)),
             "itens": itens_por_venda.get(venda.id, [])
         })
     
@@ -141,8 +157,11 @@ def obter_venda(
         item_dict['preco_custo'] = float(produto.preco_custo) if produto.preco_custo else 0
         itens_formatados.append(item_dict)
     
+    valor_pago = financeiro.mapa_pagos(db, [venda.id]).get(venda.id, financeiro.ZERO)
+
     return {
         **venda_to_dict(venda, db),
+        **dados_financeiros(venda, valor_pago),
         "itens": itens_formatados
     }
 
@@ -162,8 +181,14 @@ def criar_venda(
             detail="Venda deve ter pelo menos um item"
         )
     
+    if venda_data.cliente_id is not None and db.get(Cliente, venda_data.cliente_id) is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cliente não encontrado"
+        )
+
     usuario = get_usuario_logado(db, current_user)
-    
+
     # Calcular value total
     valor_total = Decimal("0")
     valor_frete = Decimal(str(venda_data.valor_frete or 0))
@@ -176,11 +201,12 @@ def criar_venda(
         observacoes=venda_data.observacoes,
         valor_frete=valor_frete,
         nome_cliente=venda_data.nome_cliente,
+        cliente_id=venda_data.cliente_id,
         tabela_preco_id=venda_data.tabela_preco_id,
         data_entrega=venda_data.data_entrega if venda_data.data_entrega else None,
         data_vencimento=venda_data.data_vencimento if venda_data.data_vencimento else None
     )
-    
+
     db.add(nova_venda)
     db.flush()  # Para obter o ID da venda
     
@@ -443,14 +469,16 @@ def editar_venda(
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
-    ).first()
-    
+    ).with_for_update().first()
+
     if not venda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Venda não encontrada"
         )
-    
+
+    total_anterior = venda.valor_total
+
     # Guardar estado original para auditoria
     venda_original = Venda(
         forma_pagamento=venda.forma_pagamento,
@@ -545,11 +573,21 @@ def editar_venda(
     venda.data_vencimento = venda_data.data_vencimento if venda_data.data_vencimento else None
     venda.valor_total = valor_total_itens + valor_frete
     
-    # Se vier status na requisição, atualiza (ex: concluir ao salvar edição)
-    if venda_data.status:
-        venda.status = venda_data.status
-    
     db.add(venda)
+    db.flush()
+
+    if "cliente_id" in venda_data.model_fields_set:
+        financeiro.vincular_cliente(db, venda, venda_data.cliente_id)
+
+    # Ajusta recebimentos e status (ex: concluir ao salvar edição). Um erro aqui desfaz toda a edição.
+    financeiro.aplicar_edicao(
+        db,
+        venda,
+        total_anterior,
+        venda_data.status,
+        usuario.id if usuario else None
+    )
+
     db.commit()
     db.refresh(venda)
     
@@ -587,22 +625,23 @@ def concluir_venda(
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
-    ).first()
-    
+    ).with_for_update().first()
+
     if not venda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Venda não encontrada"
         )
-    
-    venda.status = "concluído"
-    db.add(venda)
-    db.commit()
-    db.refresh(venda)
-    
-    # Registrar auditoria
+
     usuario = get_usuario_logado(db, current_user)
     usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
+
+    # Concluir equivale a baixa total: o saldo restante vira um recebimento
+    financeiro.concluir_venda(db, venda, usuario.id if usuario else None)
+    db.commit()
+    db.refresh(venda)
+
+    # Registrar auditoria
     registrar_auditoria(
         db=db,
         acao="concluir",
@@ -633,14 +672,16 @@ def cancelar_venda(
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
-    ).first()
-    
+    ).with_for_update().first()
+
     if not venda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Venda não encontrada"
         )
-    
+
+    financeiro.preparar_cancelamento(db, venda, current_user.get("user_id"))
+
     # Reverter estoque (apenas itens não excluídos)
     itens = db.query(ItemVenda).filter(
         ItemVenda.venda_id == venda_id,
@@ -692,14 +733,16 @@ def excluir_venda(
     venda = db.query(Venda).filter(
         Venda.id == venda_id,
         Venda.deleted_at.is_(None)
-    ).first()
-    
+    ).with_for_update().first()
+
     if not venda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Venda não encontrada"
         )
-    
+
+    financeiro.preparar_cancelamento(db, venda, current_user.get("user_id"))
+
     # Marcar venda como excluída
     venda.deleted_at = datetime.now()
     venda.motivo_cancelamento = dados.motivo_cancelamento

@@ -5,7 +5,8 @@ import uvicorn
 from sqlalchemy import text
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco, fiscal
+from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco, fiscal, financeiro
+from app.utils.financeiro_migracao import migrar_dados_financeiros
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -266,6 +267,15 @@ def run_migrations():
                     ))
                     conn.commit()
                     print(f"✅ Migração: coluna '{nome_coluna}' adicionada em 'empresas'")
+
+            # Vínculo da venda com o cadastro de clientes (usado pelo módulo financeiro)
+            conn.execute(text(
+                "ALTER TABLE vendas ADD COLUMN IF NOT EXISTS cliente_id INTEGER REFERENCES clientes(id)"
+            ))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_vendas_cliente_id ON vendas (cliente_id)"
+            ))
+            conn.commit()
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 
@@ -307,6 +317,13 @@ def configure_timezone():
 # Executar migrações
 run_migrations()
 
+# Preparar dados existentes para o módulo financeiro
+try:
+    resultado_financeiro = migrar_dados_financeiros(engine)
+    print(f"✅ Migração financeira: {resultado_financeiro}")
+except Exception as e:
+    print(f"❌ Migração financeira não aplicada, vendas concluídas antigas podem aparecer em aberto: {e}")
+
 # Configurar fuso horário
 configure_timezone()
 
@@ -336,6 +353,7 @@ app.include_router(usuarios.router)
 app.include_router(audit.router)
 app.include_router(tabelas_preco.router)
 app.include_router(fiscal.router)
+app.include_router(financeiro.router)
 
 
 @app.get("/")
