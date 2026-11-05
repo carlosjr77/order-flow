@@ -17,7 +17,8 @@ Eliminar o controle de saldos em planilhas externas. A equipe precisa encontrar 
 | Tema | Decisão |
 |---|---|
 | Significado de `concluído` | Significa pago: `concluído` equivale a "Liquidada" e `pendente` a "Em aberto" ou "Pago Parcialmente" |
-| Vínculo de vendas antigas | Automático apenas quando o nome normalizado bate com um único cliente. As demais ficam em lista para revisão manual |
+| Vínculo de vendas ao cliente | Por nome normalizado, ao iniciar a API, por `backend/vincular_clientes.py` e ao criar, editar ou concluir venda. Nome sem cadastro cria o cliente, sem documento. Só ficam na lista de revisão manual as vendas sem nome ou com mais de um cadastro de mesmo nome. Esta decisão substitui a revisão manual de todos os nomes sem correspondência |
+| Filtros na tela de Vendas | `GET /api/vendas` aceita `busca`, `cliente_id`, `status_financeiro`, `tipo_data`, `data_inicio` e `data_fim`, e ordena da venda mais recente para a mais antiga |
 | Recebimento não distribuído | O valor restante vira crédito do cliente, que pode ser usado depois |
 | Arquitetura | Livro de recebimentos, com saldo e status financeiro sempre calculados a partir das alocações |
 

@@ -43,6 +43,10 @@ class VinculoCliente(BaseModel):
     cliente_id: int
 
 
+class ClientePorNome(BaseModel):
+    nome: str = Field(min_length=1, max_length=255)
+
+
 def _auditar(db: Session, request: Request, current_user: dict, acao: str, entidade: str, entidade_id: int, descricao: str) -> None:
     usuario = db.query(Usuario).filter(Usuario.id == current_user.get("user_id")).first()
     registrar_auditoria(
@@ -154,6 +158,33 @@ def estornar_recebimento(
         f"Recebimento #{recebimento_id} estornado. Motivo: {dados.motivo.strip()}",
     )
     return _recebimento_resposta(db, recebimento_id)
+
+
+@router.post("/clientes/resolver")
+def resolver_cliente(
+    dados: ClientePorNome,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Encontra o cliente pelo nome ou cria o cadastro, para receber de quem ainda não está cadastrado"""
+    if not financeiro.normalizar_nome(dados.nome):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o nome do cliente.")
+
+    cliente, criado = financeiro.obter_ou_criar_cliente(db, dados.nome)
+    if cliente is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há mais de um cadastro com este nome. Escolha o cliente na lista de sugestões.",
+        )
+    resposta = {"id": cliente.id, "nome": cliente.nome, "criado": criado}
+    db.commit()
+    if criado:
+        _auditar(
+            db, request, current_user, "criar", "cliente", resposta["id"],
+            f"Cliente '{resposta['nome']}' criado automaticamente no registro de recebimento",
+        )
+    return resposta
 
 
 @router.get("/clientes/{cliente_id}/extrato")

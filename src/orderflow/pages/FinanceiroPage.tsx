@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Search } from 'lucide-react';
+import { ArrowLeft, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ClienteAutocomplete } from '../components/financeiro/ClienteAutocomplete';
 import { ExtratoClienteDialog } from '../components/financeiro/ExtratoClienteDialog';
+import { FiltrosVendasCard, ValoresFiltro } from '../components/financeiro/FiltrosVendasCard';
 import { ClienteResumo, RecebimentoModal } from '../components/financeiro/RecebimentoModal';
 import { apiClient } from '../services/api';
 import {
@@ -15,14 +15,18 @@ import {
   PaginaTitulos,
   PaginaVendasSemCliente,
   StatusFinanceiro,
-  TipoDataFiltro,
   TituloFinanceiro,
 } from '../types';
-import { COR_STATUS, ROTULO_STATUS, formatarData, formatarMoeda, mensagemErroApi } from '../utils/financeiro';
+import {
+  COR_STATUS,
+  OPCOES_STATUS_FINANCEIRO,
+  ROTULO_STATUS,
+  formatarData,
+  formatarMoeda,
+  mensagemErroApi,
+} from '../utils/financeiro';
 
 const LIMITE = 50;
-const CLASSE_SELECT =
-  'w-full h-10 px-3 rounded-md border border-gray-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-sky-500';
 
 const Paginacao: React.FC<{ pagina: number; total: number; limite: number; onMudar: (pagina: number) => void }> = ({
   pagina,
@@ -45,14 +49,6 @@ const Paginacao: React.FC<{ pagina: number; total: number; limite: number; onMud
 
 export const FinanceiroPage: React.FC = () => {
   const navigate = useNavigate();
-
-  // Campos do formulário, aplicados somente ao buscar.
-  const [textoBusca, setTextoBusca] = useState('');
-  const [clienteFiltro, setClienteFiltro] = useState<ClienteResumo | null>(null);
-  const [status, setStatus] = useState<StatusFinanceiro | ''>('');
-  const [tipoData, setTipoData] = useState<TipoDataFiltro>('emissao');
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
 
   const [filtros, setFiltros] = useState<FiltrosTitulos>({ pagina: 1, limite: LIMITE });
   const [resultado, setResultado] = useState<PaginaTitulos | null>(null);
@@ -109,27 +105,13 @@ export const FinanceiroPage: React.FC = () => {
     };
   }, [paginaSemCliente, versao]);
 
-  const aplicarFiltros = (cliente: ClienteResumo | null = clienteFiltro) => {
+  const aplicarFiltros = (valores: ValoresFiltro) => {
     setFiltros({
-      busca: cliente ? undefined : textoBusca.trim() || undefined,
-      cliente_id: cliente?.id,
-      status: status || undefined,
-      tipo_data: tipoData,
-      data_inicio: dataInicio || undefined,
-      data_fim: dataFim || undefined,
+      ...valores,
+      status: valores.status as StatusFinanceiro | undefined,
       pagina: 1,
       limite: LIMITE,
     });
-  };
-
-  const limparFiltros = () => {
-    setTextoBusca('');
-    setClienteFiltro(null);
-    setStatus('');
-    setTipoData('emissao');
-    setDataInicio('');
-    setDataFim('');
-    setFiltros({ pagina: 1, limite: LIMITE });
   };
 
   const abrirModal = (cliente: ClienteResumo | null = null, vendaId: number | null = null) => {
@@ -185,58 +167,7 @@ export const FinanceiroPage: React.FC = () => {
           </TabsList>
 
           <TabsContent value="titulos" className="space-y-4">
-            <Card className="p-5 border-slate-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
-                <div className="lg:col-span-4">
-                  <label htmlFor="busca-titulos" className="block text-xs font-medium text-gray-700 mb-1">Cliente ou CPF/CNPJ</label>
-                  <ClienteAutocomplete
-                    id="busca-titulos"
-                    valor={textoBusca}
-                    onValorChange={(texto) => {
-                      setTextoBusca(texto);
-                      setClienteFiltro(null);
-                    }}
-                    onSelecionar={(cliente) => {
-                      const resumo = { id: cliente.id, nome: cliente.nome };
-                      setTextoBusca(cliente.nome);
-                      setClienteFiltro(resumo);
-                      aplicarFiltros(resumo);
-                    }}
-                    onEnter={() => aplicarFiltros()}
-                  />
-                </div>
-                <div className="lg:col-span-2">
-                  <label htmlFor="filtro-status" className="block text-xs font-medium text-gray-700 mb-1">Status</label>
-                  <select id="filtro-status" className={CLASSE_SELECT} value={status} onChange={(e) => setStatus(e.target.value as StatusFinanceiro | '')}>
-                    <option value="">Todos</option>
-                    <option value="aberto">{ROTULO_STATUS.aberto}</option>
-                    <option value="parcial">{ROTULO_STATUS.parcial}</option>
-                    <option value="liquidada">{ROTULO_STATUS.liquidada}</option>
-                  </select>
-                </div>
-                <div className="lg:col-span-2">
-                  <label htmlFor="filtro-tipo-data" className="block text-xs font-medium text-gray-700 mb-1">Período por</label>
-                  <select id="filtro-tipo-data" className={CLASSE_SELECT} value={tipoData} onChange={(e) => setTipoData(e.target.value as TipoDataFiltro)}>
-                    <option value="emissao">Emissão</option>
-                    <option value="vencimento">Vencimento</option>
-                  </select>
-                </div>
-                <div className="lg:col-span-2">
-                  <label htmlFor="filtro-inicio" className="block text-xs font-medium text-gray-700 mb-1">De</label>
-                  <Input id="filtro-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-                </div>
-                <div className="lg:col-span-2">
-                  <label htmlFor="filtro-fim" className="block text-xs font-medium text-gray-700 mb-1">Até</label>
-                  <Input id="filtro-fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap justify-end gap-2">
-                <Button variant="outline" onClick={limparFiltros}>Limpar filtros</Button>
-                <Button className="bg-sky-600 hover:bg-sky-700" onClick={() => aplicarFiltros()}>
-                  <Search className="w-4 h-4 mr-2" />Buscar
-                </Button>
-              </div>
-            </Card>
+            <FiltrosVendasCard opcoesStatus={OPCOES_STATUS_FINANCEIRO} onAplicar={aplicarFiltros} />
 
             {erro && <Card role="alert" className="p-4 border-red-200 bg-red-50 text-red-700 text-sm">{erro}</Card>}
 
@@ -327,7 +258,7 @@ export const FinanceiroPage: React.FC = () => {
           <TabsContent value="sem-cliente">
             <Card className="p-5 border-slate-200">
               <p className="text-sm text-slate-600 mb-4">
-                Estas vendas não entram no extrato de nenhum cliente até serem vinculadas. As pendentes aparecem primeiro.
+                Vendas sem nome de cliente ou com mais de um cadastro de mesmo nome. Elas só entram no extrato depois de vinculadas. As pendentes aparecem primeiro.
               </p>
               {erroVinculo && <p role="alert" className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-700">{erroVinculo}</p>}
               {!semCliente ? (

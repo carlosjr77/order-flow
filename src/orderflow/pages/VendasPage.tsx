@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/api';
-import { Venda, DadosEmpresa } from '../types';
+import { Venda, DadosEmpresa, StatusFinanceiro } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Pencil } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 import { DanfeViewerDialog } from '../components/DanfeViewerDialog';
-import { COR_STATUS, ROTULO_STATUS, formatarMoeda, mensagemErroApi } from '../utils/financeiro';
+import { FiltrosVendasCard, ValoresFiltro } from '../components/financeiro/FiltrosVendasCard';
+import { COR_STATUS, OPCOES_STATUS_FINANCEIRO, ROTULO_STATUS, formatarMoeda, mensagemErroApi } from '../utils/financeiro';
+
+const LIMITE_VENDAS = 1000;
+const OPCOES_STATUS_VENDAS = [...OPCOES_STATUS_FINANCEIRO, { valor: 'cancelado', rotulo: 'Cancelada' }];
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +31,8 @@ export const VendasPage: React.FC = () => {
     vendaId: number | null;
   }>({ aberto: false, tipo: null, vendaId: null });
   const [motivoTexto, setMotivoTexto] = useState('');
+  const [filtros, setFiltros] = useState<ValoresFiltro>({});
+  const [erroVendas, setErroVendas] = useState('');
 
   // Dados padrão em caso de nenhuma empresa cadastrada
   const dadosEmpresaPadrao: DadosEmpresa = {
@@ -42,8 +48,13 @@ export const VendasPage: React.FC = () => {
 
   useEffect(() => {
     loadEmpresaDados();
-    loadVendas();
   }, []);
+
+  useEffect(() => {
+    // A seleção anterior pode conter vendas fora do novo filtro.
+    setSelectedVendasIds([]);
+    loadVendas();
+  }, [filtros]);
 
   const loadEmpresaDados = async () => {
     try {
@@ -58,10 +69,21 @@ export const VendasPage: React.FC = () => {
   const loadVendas = async () => {
     try {
       setIsLoading(true);
-      const data = (await apiClient.listarVendas(0, 1000)) as Venda[];
+      setErroVendas('');
+      const { status, ...demais } = filtros;
+      const data = (await apiClient.listarVendas(
+        0,
+        LIMITE_VENDAS,
+        status === 'cancelado' ? status : undefined,
+        false,
+        false,
+        { ...demais, status_financeiro: status === 'cancelado' ? undefined : (status as StatusFinanceiro | undefined) }
+      )) as Venda[];
       setVendas(data.sort((a, b) => new Date(b.data_venda).getTime() - new Date(a.data_venda).getTime()));
     } catch (error) {
       console.error('Erro ao carregar vendas:', error);
+      setVendas([]);
+      setErroVendas(mensagemErroApi(error));
     } finally {
       setIsLoading(false);
     }
@@ -418,6 +440,17 @@ export const VendasPage: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-4">
+          <FiltrosVendasCard opcoesStatus={OPCOES_STATUS_VENDAS} onAplicar={setFiltros} />
+        </div>
+        {erroVendas && (
+          <Card role="alert" className="mb-4 p-4 border-red-200 bg-red-50 text-red-700 text-sm">{erroVendas}</Card>
+        )}
+        {!isLoading && vendas.length === LIMITE_VENDAS && (
+          <Card className="mb-4 p-3 border-amber-200 bg-amber-50 text-amber-800 text-sm">
+            Mostrando as {LIMITE_VENDAS} vendas mais recentes. Use os filtros para encontrar vendas mais antigas.
+          </Card>
+        )}
         {isLoading ? (
           <Card className="p-8 text-center text-gray-500">
             Carregando vendas...

@@ -117,6 +117,21 @@ export interface FiltrosTitulos {
   limite?: number;
 }
 
+export interface FiltrosVendas {
+  busca?: string;
+  cliente_id?: number;
+  status_financeiro?: StatusFinanceiro;
+  tipo_data?: TipoDataFiltro;
+  data_inicio?: string;
+  data_fim?: string;
+}
+
+export interface ClienteResolvido {
+  id: number;
+  nome: string;
+  criado: boolean;
+}
+
 export interface PaginaTitulos {
   itens: TituloFinanceiro[];
   total: number;
