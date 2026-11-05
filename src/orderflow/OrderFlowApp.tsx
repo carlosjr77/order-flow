@@ -17,6 +17,7 @@ import { UsuariosPage } from './pages/UsuariosPage';
 import { AuditoriaPage } from './pages/AuditoriaPage';
 import { RelatorioVendasPage } from './pages/RelatorioVendasPage';
 import { TabelasPrecoPage } from './pages/TabelasPrecoPage';
+import { FinanceiroPage } from './pages/FinanceiroPage';
 
 export const OrderFlowApp: React.FC = () => {
   return (
@@ -80,6 +81,14 @@ export const OrderFlowApp: React.FC = () => {
             element={
               <PrivateRoute>
                 <RelatorioVendasPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/financeiro"
+            element={
+              <PrivateRoute>
+                <FinanceiroPage />
               </PrivateRoute>
             }
           />

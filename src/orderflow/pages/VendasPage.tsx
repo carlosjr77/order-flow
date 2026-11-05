@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { ArrowLeft, Eye, DownloadCloud, Printer, ShoppingCart, Trash2, CheckSquare2, Square, Pencil } from 'lucide-react';
 import { gerarComprovanteDANFE, gerarListaCompras, consolidarItensVendas, gerarRelatorioFinanceiro, DadosRelatorioFinanceiro } from '../utils/gerarComprovante';
 import { DanfeViewerDialog } from '../components/DanfeViewerDialog';
+import { COR_STATUS, ROTULO_STATUS, formatarMoeda, mensagemErroApi } from '../utils/financeiro';
 
 export const VendasPage: React.FC = () => {
   const navigate = useNavigate();
@@ -153,7 +154,7 @@ export const VendasPage: React.FC = () => {
       loadVendas();
     } catch (error: any) {
       console.error(`Erro ao ${modalMotivo.tipo} venda:`, error);
-      alert(error?.message || `Erro ao ${modalMotivo.tipo} venda. Apenas administradores podem executar esta ação.`);
+      alert(error?.message ? mensagemErroApi(error) : `Erro ao ${modalMotivo.tipo} venda. Apenas administradores podem executar esta ação.`);
     }
   };
 
@@ -502,6 +503,11 @@ export const VendasPage: React.FC = () => {
                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(venda.status)}`}>
                              {venda.status}
                            </span>
+                           {venda.status_financeiro && (
+                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${COR_STATUS[venda.status_financeiro]}`}>
+                               {ROTULO_STATUS[venda.status_financeiro]}
+                             </span>
+                           )}
                          </div>
                          <p className="text-sm text-gray-600">
                            Data: {new Date(venda.data_venda).toLocaleDateString('pt-BR', {
@@ -543,6 +549,11 @@ export const VendasPage: React.FC = () => {
                       <p className="text-sm text-gray-600">
                         {venda.itens?.length || 0} itens
                       </p>
+                      {venda.status_financeiro === 'parcial' && (
+                        <p className="text-sm font-semibold text-red-700">
+                          Saldo: {formatarMoeda(venda.saldo ?? 0)}
+                        </p>
+                      )}
                     </div>
                   </div>
 

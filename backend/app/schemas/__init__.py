@@ -145,6 +145,7 @@ class VendaCreate(BaseModel):
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
+    cliente_id: Optional[int] = None
     tabela_preco_id: Optional[int] = None  # Tabela de preços usada na venda
     data_entrega: Optional[date] = None  # Data de entrega
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
@@ -156,6 +157,7 @@ class VendaUpdate(BaseModel):
     observacoes: Optional[str] = None
     valor_frete: Optional[float] = 0
     nome_cliente: Optional[str] = None
+    cliente_id: Optional[int] = None  # Só altera o vínculo quando enviado na requisição
     tabela_preco_id: Optional[int] = None  # Tabela de preços usada na venda
     data_entrega: Optional[date] = None  # Data de entrega
     data_vencimento: Optional[date] = None  # Data de vencimento do pedido (opcional)
@@ -166,15 +168,19 @@ class VendaResponse(VendaBase):
     id: int
     usuario_id: Optional[int] = None
     usuario_nome: Optional[str] = None
+    cliente_id: Optional[int] = None
     data_venda: datetime
     status: str
     motivo_cancelamento: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    
+    valor_pago: Optional[float] = None
+    saldo: Optional[float] = None
+    status_financeiro: Optional[str] = None  # aberto, parcial, liquidada; nulo em venda cancelada ou excluída
+
     class Config:
         from_attributes = True
-    
+
     @field_validator('data_entrega', 'data_vencimento', mode='plain')
     @classmethod
     def converter_datas(cls, v):
