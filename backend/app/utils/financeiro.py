@@ -5,6 +5,7 @@ recebimentos não estornados. Estas funções não fazem commit: quem chama deci
 o fim da transação, e qualquer erro levantado desfaz o que foi feito.
 """
 import re
+import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable, Optional, Sequence
@@ -380,6 +381,58 @@ def vincular_cliente(db: Session, venda: Venda, cliente_id: Optional[int]) -> No
     db.flush()
 
 
+def normalizar_nome(nome: Optional[str]) -> str:
+    """Forma de comparação de nomes: sem acentos, sem diferença de caixa e com espaços colapsados."""
+    sem_acento = "".join(
+        letra for letra in unicodedata.normalize("NFKD", nome or "") if not unicodedata.combining(letra)
+    )
+    return " ".join(sem_acento.casefold().split())
+
+
+def clientes_com_nome(db: Session, nome: Optional[str]) -> list[int]:
+    """Ids dos clientes cujo nome normalizado é igual ao informado."""
+    alvo = normalizar_nome(nome)
+    return [
+        cliente_id
+        for cliente_id, nome_cliente in db.execute(select(Cliente.id, Cliente.nome).order_by(Cliente.id)).all()
+        if normalizar_nome(nome_cliente) == alvo
+    ]
+
+
+def obter_ou_criar_cliente(db: Session, nome: Optional[str]) -> tuple[Optional[Cliente], bool]:
+    """Devolve o cliente do nome e se ele foi criado agora.
+
+    Retorna (None, False) para nome vazio ou quando há mais de um cadastro com o nome,
+    pois escolher um deles poderia lançar a dívida na conta da pessoa errada.
+    """
+    alvo = normalizar_nome(nome)
+    if not alvo:
+        return None, False
+
+    # Impede que duas vendas simultâneas criem o mesmo cliente duas vezes.
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtext(alvo))))
+    candidatos = clientes_com_nome(db, nome)
+    if len(candidatos) > 1:
+        return None, False
+    if candidatos:
+        return db.get(Cliente, candidatos[0]), False
+
+    cliente = Cliente(nome=" ".join(nome.split()))
+    db.add(cliente)
+    db.flush()
+    return cliente, True
+
+
+def garantir_cliente(db: Session, venda: Venda) -> Optional[Cliente]:
+    """Liga ao cadastro a venda que só tem o nome do cliente. Devolve o cliente, se foi criado agora."""
+    if venda.cliente_id is not None or venda.status == "cancelado":
+        return None
+    cliente, criado = obter_ou_criar_cliente(db, venda.nome_cliente)
+    if cliente is not None:
+        vincular_cliente(db, venda, cliente.id)
+    return cliente if criado else None
+
+
 def descricao_titulo(venda_id: int, numero_nfe: Optional[int]) -> str:
     return f"NF-e nº {numero_nfe}" if numero_nfe else f"Pedido #{venda_id}"
 
@@ -419,8 +472,8 @@ def _filtro_busca(busca: str):
     return or_(*condicoes)
 
 
-def buscar_titulos(
-    db: Session,
+def _condicoes_filtro(
+    pagos,
     *,
     busca: Optional[str] = None,
     cliente_id: Optional[int] = None,
@@ -428,19 +481,16 @@ def buscar_titulos(
     tipo_data: str = "emissao",
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
-    pagina: int = 1,
-    limite: int = 50,
-) -> dict:
-    """Busca paginada de títulos. O status é filtrado em SQL para os totais ficarem corretos."""
+) -> list:
+    """Condições usadas nas telas Financeiro e Vendas. Exigem join com Cliente e com `pagos`."""
     if data_inicio and data_fim and data_inicio > data_fim:
         raise _dados_invalidos("A data inicial não pode ser maior que a data final.")
 
-    pagos = _pagos_subquery()
     pago = func.coalesce(pagos.c.pago, 0)
     saldo = Venda.valor_total - pago
     coluna_data = Venda.data_vencimento if tipo_data == "vencimento" else cast(Venda.data_venda, Date)
 
-    filtros = [Venda.deleted_at.is_(None), Venda.status != "cancelado"]
+    filtros = []
     if busca and busca.strip():
         filtros.append(_filtro_busca(busca))
     if cliente_id is not None:
@@ -455,6 +505,54 @@ def buscar_titulos(
         filtros.append(coluna_data >= data_inicio)
     if data_fim:
         filtros.append(coluna_data <= data_fim)
+    return filtros
+
+
+def filtrar_vendas(query, **filtros):
+    """Aplica os filtros da tela de Vendas a uma consulta de `Venda`."""
+    pagos = _pagos_subquery()
+    condicoes = _condicoes_filtro(pagos, **filtros)
+    if filtros.get("status"):
+        condicoes.append(Venda.status != "cancelado")
+    if not condicoes:
+        return query
+    return (
+        query.outerjoin(Cliente, Cliente.id == Venda.cliente_id)
+        .outerjoin(pagos, pagos.c.venda_id == Venda.id)
+        .filter(*condicoes)
+    )
+
+
+def buscar_titulos(
+    db: Session,
+    *,
+    busca: Optional[str] = None,
+    cliente_id: Optional[int] = None,
+    status: Optional[str] = None,
+    tipo_data: str = "emissao",
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+    pagina: int = 1,
+    limite: int = 50,
+) -> dict:
+    """Busca paginada de títulos. O status é filtrado em SQL para os totais ficarem corretos."""
+    pagos = _pagos_subquery()
+    pago = func.coalesce(pagos.c.pago, 0)
+    saldo = Venda.valor_total - pago
+
+    filtros = [
+        Venda.deleted_at.is_(None),
+        Venda.status != "cancelado",
+        *_condicoes_filtro(
+            pagos,
+            busca=busca,
+            cliente_id=cliente_id,
+            status=status,
+            tipo_data=tipo_data,
+            data_inicio=data_inicio,
+            data_fim=data_fim,
+        ),
+    ]
 
     def _com_joins(consulta):
         return (

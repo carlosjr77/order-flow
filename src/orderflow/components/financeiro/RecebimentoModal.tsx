@@ -60,6 +60,7 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
   const [editadoManual, setEditadoManual] = useState(false);
   const [creditoId, setCreditoId] = useState<number | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [resolvendo, setResolvendo] = useState(false);
   const [erro, setErro] = useState('');
 
   useEffect(() => {
@@ -83,6 +84,7 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
       return;
     }
     let cancelado = false;
+    setExtrato(null);
     setCarregando(true);
     setErro('');
     apiClient
@@ -152,6 +154,22 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
     return '';
   })();
 
+  const usarNomeDigitado = async () => {
+    const nome = textoCliente.trim();
+    if (cliente || nome.length < 2 || resolvendo) return;
+    setResolvendo(true);
+    setErro('');
+    try {
+      const resolvido = await apiClient.resolverCliente(nome);
+      setTextoCliente(resolvido.nome);
+      setCliente({ id: resolvido.id, nome: resolvido.nome });
+    } catch (e) {
+      setErro(mensagemErroApi(e));
+    } finally {
+      setResolvendo(false);
+    }
+  };
+
   const salvar = async () => {
     if (problema || !cliente || salvando) return;
     setSalvando(true);
@@ -207,7 +225,20 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
                 setValores({});
                 setEditadoManual(false);
               }}
+              onEnter={() => void usarNomeDigitado()}
             />
+            {!cliente && textoCliente.trim().length >= 2 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                disabled={resolvendo}
+                onClick={() => void usarNomeDigitado()}
+              >
+                {resolvendo ? 'Verificando...' : `Usar "${textoCliente.trim()}" (cadastra se ainda não existir)`}
+              </Button>
+            )}
           </div>
 
           {creditos.length > 0 && (
@@ -269,7 +300,7 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
                   Sugerir pelo vencimento mais antigo
                 </Button>
               </div>
-              {carregando ? (
+              {carregando || (!extrato && !erro) ? (
                 <p className="text-sm text-slate-500 py-4 text-center">Carregando notas...</p>
               ) : titulos.length === 0 ? (
                 <p className="text-sm text-slate-500 py-4 text-center">

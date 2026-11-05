@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
+from typing import List, Literal, Optional
+from datetime import date, datetime
 from decimal import Decimal
 from pydantic import BaseModel
 from app.core.database import get_db
@@ -31,6 +31,22 @@ def dados_financeiros(venda: Venda, valor_pago: Decimal) -> dict:
     }
 
 
+def auditar_cliente_criado(db: Session, request: Request, cliente: Optional[Cliente], venda_id: int, usuario: Optional[Usuario]) -> None:
+    """Registra o cadastro criado automaticamente a partir do nome informado na venda."""
+    if cliente is None:
+        return
+    registrar_auditoria(
+        db=db,
+        acao="criar",
+        entidade="cliente",
+        entidade_id=cliente.id,
+        descricao=f"Cliente '{cliente.nome}' criado automaticamente a partir da venda #{venda_id}",
+        user_id=usuario.id if usuario else None,
+        user_name=(usuario.nome or usuario.username) if usuario else "sistema",
+        ip_address=get_client_ip(request),
+    )
+
+
 def venda_to_dict(venda: Venda, db: Session) -> dict:
     """Converte uma venda em dicionário incluindo nome do usuário"""
     data = {column.name: getattr(venda, column.name) for column in venda.__table__.columns}
@@ -52,20 +68,37 @@ def listar_vendas(
     status_filter: str = None,
     include_deleted: bool = False,
     include_item_costs: bool = False,
+    busca: Optional[str] = None,
+    cliente_id: Optional[int] = None,
+    status_financeiro: Optional[Literal["aberto", "parcial", "liquidada"]] = None,
+    tipo_data: Literal["emissao", "vencimento"] = "emissao",
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Lista todas as vendas (opcionalmente inclui excluídas)"""
+    """Lista as vendas mais recentes primeiro, com filtros opcionais (pode incluir excluídas)"""
     query = db.query(Venda)
-    
+
     # Filtrar vendas não excluídas (a menos que include_deleted=True)
     if not include_deleted:
         query = query.filter(Venda.deleted_at.is_(None))
-    
+
     if status_filter:
         query = query.filter(Venda.status == status_filter)
-    
-    vendas = query.offset(skip).limit(limit).all()
+
+    query = financeiro.filtrar_vendas(
+        query,
+        busca=busca,
+        cliente_id=cliente_id,
+        status=status_financeiro,
+        tipo_data=tipo_data,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
+
+    # Ordem estável: sem ela, o limite pode deixar vendas de fora de forma arbitrária
+    vendas = query.order_by(Venda.data_venda.desc(), Venda.id.desc()).offset(skip).limit(limit).all()
 
     if not vendas:
         return []
@@ -247,10 +280,15 @@ def criar_venda(
     
     # Atualizar value total da venda (incluindo frete)
     nova_venda.valor_total = valor_total + valor_frete
-    
+
+    # Venda só com o nome do cliente: usa o cadastro existente ou cria um novo
+    cliente_criado = financeiro.garantir_cliente(db, nova_venda)
+
     db.commit()
     db.refresh(nova_venda)
-    
+
+    auditar_cliente_criado(db, request, cliente_criado, nova_venda.id, usuario)
+
     # Registrar auditoria
     usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
     registrar_auditoria(
@@ -579,6 +617,8 @@ def editar_venda(
     if "cliente_id" in venda_data.model_fields_set:
         financeiro.vincular_cliente(db, venda, venda_data.cliente_id)
 
+    cliente_criado = financeiro.garantir_cliente(db, venda)
+
     # Ajusta recebimentos e status (ex: concluir ao salvar edição). Um erro aqui desfaz toda a edição.
     financeiro.aplicar_edicao(
         db,
@@ -590,7 +630,9 @@ def editar_venda(
 
     db.commit()
     db.refresh(venda)
-    
+
+    auditar_cliente_criado(db, request, cliente_criado, venda.id, usuario)
+
     # Registrar auditoria detalhada
     descricao_edicao = gerar_descricao_edicao(
         venda_original=venda_original,
@@ -636,10 +678,14 @@ def concluir_venda(
     usuario = get_usuario_logado(db, current_user)
     usuario_nome = usuario.nome or usuario.username if usuario else "sistema"
 
+    cliente_criado = financeiro.garantir_cliente(db, venda)
+
     # Concluir equivale a baixa total: o saldo restante vira um recebimento
     financeiro.concluir_venda(db, venda, usuario.id if usuario else None)
     db.commit()
     db.refresh(venda)
+
+    auditar_cliente_criado(db, request, cliente_criado, venda.id, usuario)
 
     # Registrar auditoria
     registrar_auditoria(

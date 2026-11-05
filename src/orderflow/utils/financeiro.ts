@@ -17,6 +17,11 @@ export const ROTULO_STATUS: Record<StatusFinanceiro, string> = {
   liquidada: 'Liquidada',
 };
 
+export const OPCOES_STATUS_FINANCEIRO = (Object.keys(ROTULO_STATUS) as StatusFinanceiro[]).map((valor) => ({
+  valor,
+  rotulo: ROTULO_STATUS[valor],
+}));
+
 export const COR_STATUS: Record<StatusFinanceiro, string> = {
   aberto: 'bg-yellow-100 text-yellow-800',
   parcial: 'bg-blue-100 text-blue-800',

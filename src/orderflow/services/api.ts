@@ -2,8 +2,10 @@ import {
   CriarUsuarioData,
   AtualizarUsuarioData,
   TrocaSenhaData,
+  ClienteResolvido,
   ExtratoCliente,
   FiltrosTitulos,
+  FiltrosVendas,
   NovoRecebimento,
   PaginaTitulos,
   PaginaVendasSemCliente,
@@ -146,7 +148,8 @@ export class APIClient {
     limit = 100,
     status?: string,
     includeDeleted: boolean = false,
-    includeItemCosts: boolean = false
+    includeItemCosts: boolean = false,
+    filtros: FiltrosVendas = {}
   ) {
     const params = new URLSearchParams();
     params.append('skip', skip.toString());
@@ -154,6 +157,9 @@ export class APIClient {
     if (status) params.append('status_filter', status);
     if (includeDeleted) params.append('include_deleted', 'true');
     if (includeItemCosts) params.append('include_item_costs', 'true');
+    Object.entries(filtros).forEach(([chave, valor]) => {
+      if (valor !== undefined && valor !== null && valor !== '') params.append(chave, String(valor));
+    });
     return this.request(`/api/vendas?${params}`, 'GET');
   }
 
@@ -218,6 +224,10 @@ export class APIClient {
 
   async estornarRecebimento(recebimentoId: number, motivo: string): Promise<RecebimentoFinanceiro> {
     return this.request(`/api/financeiro/recebimentos/${recebimentoId}/estornar`, 'POST', { motivo });
+  }
+
+  async resolverCliente(nome: string): Promise<ClienteResolvido> {
+    return this.request('/api/financeiro/clientes/resolver', 'POST', { nome });
   }
 
   async obterExtratoCliente(clienteId: number): Promise<ExtratoCliente> {
