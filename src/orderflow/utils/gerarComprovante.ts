@@ -1,4 +1,6 @@
 import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
+import { formatarChavePix, montarPayloadPix } from './pix';
 import autoTable from 'jspdf-autotable';
 import { Venda, ItemVenda } from '../types';
 import logoOk from '../../assets/logo-ok.png';
@@ -22,6 +24,7 @@ export interface DadosComprovante {
     estado: string;
     cep: string;
     telefone?: string;
+    chave_pix?: string | null;
   };
   venda: Venda;
   // Permitindo index signature flexível caso os dados venham do backend com formatos variados
@@ -460,8 +463,90 @@ export const gerarComprovanteDANFE = async (dados: DadosComprovante): Promise<js
   doc.setFontSize(5.5);
   doc.setFont('helvetica', 'normal');
   doc.text("RESERVADO AO CONTROLE INTERNO", m + w * 0.70 + 1, y + 2.5);
+  y += 25 + 4;
+
+  // ==================== PAGAMENTO VIA PIX ====================
+  const pix = await prepararPixComprovante(dados);
+  if (pix) {
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(6.5);
+    const linhasCopiaCola: string[] = doc.splitTextToSize(pix.payload, w - 4);
+    const tamanhoQr = 34;
+    const alturaBloco = 2 + tamanhoQr + 6 + linhasCopiaCola.length * 2.8 + 2;
+
+    if (y + alturaBloco + 4 > 297 - m) {
+      doc.addPage();
+      y = m;
+    }
+
+    drawSectionTitle("PAGAMENTO VIA PIX", y + 2.5);
+    y += 3.5;
+    doc.rect(m, y, w, alturaBloco);
+    doc.addImage(pix.imagem, 'PNG', m + 2, y + 2, tamanhoQr, tamanhoQr);
+
+    const xTexto = m + tamanhoQr + 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`Valor: ${fmtMoney(pix.valor)}`, xTexto, y + 8);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Recebedor: ${dados.empresa.nome}`, xTexto, y + 14);
+    doc.text(`Chave Pix: ${formatarChavePix(pix.chave)}`, xTexto, y + 18.5);
+    doc.text(`Identificador: PEDIDO${dados.venda.id}`, xTexto, y + 23);
+    doc.setFontSize(7);
+    doc.text(
+      doc.splitTextToSize(
+        'Abra o app do seu banco, escolha pagar com Pix e leia o QR Code, ou use o código Pix Copia e Cola abaixo.',
+        w - tamanhoQr - 10
+      ),
+      xTexto,
+      y + 29
+    );
+
+    let yCopiaCola = y + 2 + tamanhoQr + 4;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.text("PIX COPIA E COLA", m + 2, yCopiaCola);
+    doc.setFont('courier', 'normal');
+    linhasCopiaCola.forEach((linha) => {
+      yCopiaCola += 2.8;
+      doc.text(linha, m + 2, yCopiaCola);
+    });
+    doc.setFont('helvetica', 'normal');
+  }
 
   return doc;
+};
+
+/**
+ * QR Code Pix do comprovante. Só existe quando a empresa tem chave Pix e a venda ainda tem valor a receber.
+ * Cobra o saldo restante, que na venda recém-criada é o valor total.
+ */
+const prepararPixComprovante = async (
+  dados: DadosComprovante
+): Promise<{ payload: string; imagem: string; valor: number; chave: string } | null> => {
+  const chave = dados.empresa.chave_pix?.trim();
+  if (!chave || dados.venda.status === 'cancelado') return null;
+
+  const saldo = dados.venda.saldo;
+  const valor = typeof saldo === 'number' ? saldo : Number(dados.venda.valor_total || 0);
+  if (!(valor > 0)) return null;
+
+  try {
+    const payload = montarPayloadPix({
+      chave,
+      nomeRecebedor: dados.empresa.nome,
+      cidade: dados.empresa.cidade,
+      valor,
+      txid: `PEDIDO${dados.venda.id}`,
+    });
+    const imagem = await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', margin: 1, width: 400 });
+    return { payload, imagem, valor, chave };
+  } catch (erro) {
+    // O comprovante continua válido sem o Pix; o motivo fica no console para suporte.
+    console.warn('QR Code Pix não incluído no comprovante:', erro);
+    return null;
+  }
 };
 
 export interface DadosListaCompras {

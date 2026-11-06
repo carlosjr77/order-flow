@@ -171,6 +171,14 @@ export interface TituloExtrato {
   status_financeiro: StatusFinanceiro;
 }
 
+export interface RelatorioCliente {
+  cliente: { id: number; nome: string; documento: string | null; telefone: string | null };
+  periodo: { data_inicio: string; data_fim: string; tipo_data: TipoDataFiltro };
+  resumo: { quantidade: number; valor_total: number; valor_pago: number; saldo_pendente: number };
+  titulos: TituloExtrato[];
+  gerado_em: string;
+}
+
 export interface ExtratoCliente {
   cliente: { id: number; nome: string; documento: string | null; telefone: string | null };
   resumo: {
@@ -262,6 +270,7 @@ export interface DadosEmpresa {
   emissao_nfe_habilitada?: boolean;
   codigo_municipio_ibge?: string | null;
   codigo_pais?: string | null;
+  chave_pix?: string | null;
 }
 
 export interface AuditLog {

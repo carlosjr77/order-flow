@@ -8,6 +8,8 @@ from app.core.database import Base, engine
 from app.routes import auth, produtos, vendas, empresas, clientes, usuarios, audit, tabelas_preco, fiscal, financeiro
 from app.utils.financeiro_migracao import migrar_dados_financeiros
 
+CHAVE_PIX_INICIAL = "68343883000176"  # CNPJ 68.343.883/0001-76, somente dígitos como exige o padrão Pix
+
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
 
@@ -276,6 +278,17 @@ def run_migrations():
                 "CREATE INDEX IF NOT EXISTS ix_vendas_cliente_id ON vendas (cliente_id)"
             ))
             conn.commit()
+
+            # Chave Pix dos comprovantes. Ao criar a coluna, já recebe a chave (CNPJ) definida para a empresa.
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'empresas' AND column_name = 'chave_pix'"
+            )).fetchone()
+            if result[0] == 0:
+                conn.execute(text("ALTER TABLE empresas ADD COLUMN chave_pix VARCHAR(77)"))
+                conn.execute(text("UPDATE empresas SET chave_pix = :chave"), {"chave": CHAVE_PIX_INICIAL})
+                conn.commit()
+                print("✅ Migração: coluna 'chave_pix' adicionada em 'empresas'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 

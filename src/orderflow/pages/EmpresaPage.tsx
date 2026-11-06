@@ -39,6 +39,7 @@ export const EmpresaPage: React.FC = () => {
     emissao_nfe_habilitada: false,
     codigo_municipio_ibge: '',
     codigo_pais: '1058',
+    chave_pix: '',
   });
 
   useEffect(() => {
@@ -294,6 +295,24 @@ export const EmpresaPage: React.FC = () => {
                   onChange={handleCEPChange}
                   placeholder="01000-000"
                 />
+              </div>
+
+              <div className="border-t pt-6">
+                <h2 className="text-lg font-semibold text-gray-900">Pix</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Com uma chave preenchida, o comprovante de venda traz um QR Code Pix com o valor a receber. O nome e a cidade da empresa aparecem para o pagador.
+                </p>
+                <div className="mt-4 max-w-md">
+                  <label htmlFor="chave_pix" className="block text-sm font-medium text-gray-700 mb-2">Chave Pix</label>
+                  <Input
+                    id="chave_pix"
+                    name="chave_pix"
+                    value={formData.chave_pix || ''}
+                    onChange={handleInputChange}
+                    placeholder="CNPJ, CPF, e-mail, telefone ou chave aleatória"
+                    maxLength={77}
+                  />
+                </div>
               </div>
 
               <div className="border-t pt-6">

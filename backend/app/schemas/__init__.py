@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Literal
 from datetime import datetime, date
 
@@ -222,6 +222,7 @@ class EmpresaBase(BaseModel):
     emissao_nfe_habilitada: Optional[bool] = False
     codigo_municipio_ibge: Optional[str] = None
     codigo_pais: Optional[str] = "1058"
+    chave_pix: Optional[str] = Field(default=None, max_length=77)
 
 
 class EmpresaCreate(EmpresaBase):
@@ -255,6 +256,7 @@ class EmpresaUpdate(BaseModel):
     emissao_nfe_habilitada: Optional[bool] = None
     codigo_municipio_ibge: Optional[str] = None
     codigo_pais: Optional[str] = None
+    chave_pix: Optional[str] = Field(default=None, max_length=77)
 
 
 class EmpresaResponse(EmpresaBase):

@@ -225,19 +225,20 @@ export const RecebimentoModal: React.FC<RecebimentoModalProps> = ({
                 setValores({});
                 setEditadoManual(false);
               }}
-              onEnter={() => void usarNomeDigitado()}
             />
             {!cliente && textoCliente.trim().length >= 2 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                disabled={resolvendo}
-                onClick={() => void usarNomeDigitado()}
-              >
-                {resolvendo ? 'Verificando...' : `Usar "${textoCliente.trim()}" (cadastra se ainda não existir)`}
-              </Button>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                <span>Não encontrou na lista?</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={resolvendo}
+                  onClick={() => void usarNomeDigitado()}
+                >
+                  {resolvendo ? 'Verificando...' : `Cadastrar "${textoCliente.trim()}" como cliente`}
+                </Button>
+              </div>
             )}
           </div>
 

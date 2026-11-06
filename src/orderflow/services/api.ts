@@ -10,6 +10,8 @@ import {
   PaginaTitulos,
   PaginaVendasSemCliente,
   RecebimentoFinanceiro,
+  RelatorioCliente,
+  TipoDataFiltro,
 } from '../types';
 
 // API Configuration
@@ -228,6 +230,14 @@ export class APIClient {
 
   async resolverCliente(nome: string): Promise<ClienteResolvido> {
     return this.request('/api/financeiro/clientes/resolver', 'POST', { nome });
+  }
+
+  async obterRelatorioCliente(
+    clienteId: number,
+    periodo: { data_inicio: string; data_fim: string; tipo_data: TipoDataFiltro }
+  ): Promise<RelatorioCliente> {
+    const params = new URLSearchParams(periodo);
+    return this.request(`/api/financeiro/clientes/${clienteId}/relatorio?${params}`, 'GET');
   }
 
   async obterExtratoCliente(clienteId: number): Promise<ExtratoCliente> {

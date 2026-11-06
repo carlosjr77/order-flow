@@ -4,17 +4,17 @@ Saldo e status financeiro são sempre calculados a partir das alocações de
 recebimentos não estornados. Estas funções não fazem commit: quem chama decide
 o fim da transação, e qualquer erro levantado desfaz o que foi feito.
 """
-import re
 import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable, Optional, Sequence
 
 from fastapi import HTTPException, status as http_status
-from sqlalchemy import Date, String, and_, cast, func, literal, or_, select
+from sqlalchemy import Date, and_, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Cliente, NFe, Recebimento, RecebimentoAlocacao, Venda
+from app.utils import busca as busca_texto
 
 FORMAS_AVULSO = ("PIX", "Boleto", "Transferência")
 ORIGEM_AVULSO = "avulso"
@@ -29,8 +29,6 @@ FORMA_NAO_INFORMADA = "Não informado"
 
 ZERO = Decimal("0.00")
 _BRASILIA = timezone(timedelta(hours=-3))
-_ACENTOS = "áàãâäéèêëíìîïóòõôöúùûüçñ"
-_SEM_ACENTOS = "aaaaaeeeeiiiiooooouuuucn"
 
 
 def _erro(status_code: int, detail: str) -> HTTPException:
@@ -450,25 +448,11 @@ def _pagos_subquery():
     )
 
 
-def _sem_acento(coluna):
-    return func.translate(func.lower(coluna), _ACENTOS, _SEM_ACENTOS)
-
-
-def _padrao_like(termo: str) -> str:
-    escapado = termo.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return f"%{escapado}%"
-
-
 def _filtro_busca(busca: str):
-    padrao = _sem_acento(literal(_padrao_like(busca.strip()), String))
-    condicoes = [
-        _sem_acento(Cliente.nome).like(padrao, escape="\\"),
-        _sem_acento(Venda.nome_cliente).like(padrao, escape="\\"),
-    ]
-    digitos = re.sub(r"\D", "", busca)
-    if digitos:
-        documento = func.regexp_replace(Cliente.documento, r"\D", "", "g")
-        condicoes.append(documento.like(f"%{digitos}%"))
+    condicoes = [busca_texto.contem(Cliente.nome, busca), busca_texto.contem(Venda.nome_cliente, busca)]
+    documento = busca_texto.documento_contem(Cliente.documento, busca)
+    if documento is not None:
+        condicoes.append(documento)
     return or_(*condicoes)
 
 
@@ -533,9 +517,14 @@ def buscar_titulos(
     data_inicio: Optional[date] = None,
     data_fim: Optional[date] = None,
     pagina: int = 1,
-    limite: int = 50,
+    limite: Optional[int] = 50,
+    ordenar_por_data: bool = False,
 ) -> dict:
-    """Busca paginada de títulos. O status é filtrado em SQL para os totais ficarem corretos."""
+    """Busca de títulos. O status é filtrado em SQL para os totais ficarem corretos.
+
+    `limite=None` traz todos os títulos. `ordenar_por_data` ordena pela data do filtro, da mais antiga
+    para a mais recente; sem ele, a ordem é por vencimento, com os sem vencimento no final.
+    """
     pagos = _pagos_subquery()
     pago = func.coalesce(pagos.c.pago, 0)
     saldo = Venda.valor_total - pago
@@ -569,13 +558,18 @@ def buscar_titulos(
         func.coalesce(func.sum(saldo), 0),
     ))).one()
 
-    linhas = db.execute(
+    consulta = (
         _com_joins(select(Venda, Cliente, pago.label("pago"), NFe.numero))
         .outerjoin(NFe, and_(NFe.venda_id == Venda.id, NFe.status == "autorizada"))
-        .order_by(Venda.data_vencimento.asc().nulls_last(), Venda.id.desc())
-        .offset((pagina - 1) * limite)
-        .limit(limite)
-    ).all()
+    )
+    if ordenar_por_data:
+        coluna_data = Venda.data_vencimento if tipo_data == "vencimento" else Venda.data_venda
+        consulta = consulta.order_by(coluna_data.asc().nulls_last(), Venda.id.asc())
+    else:
+        consulta = consulta.order_by(Venda.data_vencimento.asc().nulls_last(), Venda.id.desc())
+    if limite is not None:
+        consulta = consulta.offset((pagina - 1) * limite).limit(limite)
+    linhas = db.execute(consulta).all()
 
     itens = [
         {
@@ -689,5 +683,50 @@ def extrato_cliente(db: Session, cliente_id: int) -> dict:
         },
         "titulos": titulos,
         "recebimentos": recebimentos,
+        "gerado_em": datetime.now(_BRASILIA).replace(tzinfo=None),
+    }
+
+
+def relatorio_cliente(
+    db: Session,
+    cliente_id: int,
+    *,
+    data_inicio: date,
+    data_fim: date,
+    tipo_data: str = "emissao",
+) -> dict:
+    """Notas do cliente no período, com quantidade e totais calculados no banco."""
+    cliente = db.get(Cliente, cliente_id)
+    if cliente is None:
+        raise _nao_encontrado("Cliente não encontrado")
+
+    resultado = buscar_titulos(
+        db,
+        cliente_id=cliente_id,
+        tipo_data=tipo_data,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        limite=None,
+        ordenar_por_data=True,
+    )
+    totais = resultado["totais"]
+    return {
+        "cliente": {
+            "id": cliente.id,
+            "nome": cliente.nome,
+            "documento": cliente.documento,
+            "telefone": cliente.telefone,
+        },
+        "periodo": {"data_inicio": data_inicio, "data_fim": data_fim, "tipo_data": tipo_data},
+        "resumo": {
+            "quantidade": resultado["total"],
+            "valor_total": totais["valor_original"],
+            "valor_pago": totais["valor_pago"],
+            "saldo_pendente": totais["saldo"],
+        },
+        "titulos": [
+            {chave: valor for chave, valor in item.items() if chave not in ("cliente_id", "cliente_nome", "cliente_documento")}
+            for item in resultado["itens"]
+        ],
         "gerado_em": datetime.now(_BRASILIA).replace(tzinfo=None),
     }

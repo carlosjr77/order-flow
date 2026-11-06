@@ -187,6 +187,21 @@ def resolver_cliente(
     return resposta
 
 
+@router.get("/clientes/{cliente_id}/relatorio")
+def obter_relatorio_cliente(
+    cliente_id: int,
+    data_inicio: date,
+    data_fim: date,
+    tipo_data: Literal["emissao", "vencimento"] = "emissao",
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Notas do cliente no período, com quantidade, valor total e saldo pendente, para o relatório em PDF"""
+    return financeiro.relatorio_cliente(
+        db, cliente_id, data_inicio=data_inicio, data_fim=data_fim, tipo_data=tipo_data
+    )
+
+
 @router.get("/clientes/{cliente_id}/extrato")
 def obter_extrato(
     cliente_id: int,
