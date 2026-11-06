@@ -34,6 +34,7 @@ class Empresa(Base):
     emissao_nfe_habilitada = Column(Integer, nullable=False, default=0)
     codigo_municipio_ibge = Column(String(7), nullable=True)
     codigo_pais = Column(String(4), nullable=False, default="1058")
+    chave_pix = Column(String(77), nullable=True)  # Chave do QR Code Pix nos comprovantes de venda
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     

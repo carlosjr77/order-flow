@@ -74,7 +74,10 @@ def criar_empresa(
             detail="Já existe uma empresa com este CNPJ"
         )
     
-    empresa = Empresa(**empresa_data.dict())
+    dados = empresa_data.dict()
+    # A coluna é inteira no banco (0/1), como na atualização
+    dados["emissao_nfe_habilitada"] = 1 if dados.get("emissao_nfe_habilitada") else 0
+    empresa = Empresa(**dados)
     db.add(empresa)
     db.commit()
     db.refresh(empresa)

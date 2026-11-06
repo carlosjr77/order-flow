@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 from app.core.database import get_db
 from app.routes.auth import get_current_user
 from app.models import Cliente, Usuario
 from app.schemas import ClienteCreate, ClienteResponse, ClienteUpdate
+from app.utils import busca as busca_texto
 from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/clientes", tags=["Clientes"])
@@ -23,15 +25,22 @@ def listar_clientes(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """Lista todos os clientes com paginação e busca opcional"""
+    """Lista clientes. A busca é parcial e ignora maiúsculas e acentos: "baru" encontra "Baru Cozinha"."""
     query = db.query(Cliente)
-    
-    if busca:
-        query = query.filter(
-            (Cliente.nome.ilike(f"%{busca}%")) |
-            (Cliente.documento.ilike(f"%{busca}%"))
+
+    if busca and busca.strip():
+        condicoes = [busca_texto.contem(Cliente.nome, busca)]
+        documento = busca_texto.documento_contem(Cliente.documento, busca)
+        if documento is not None:
+            condicoes.append(documento)
+        query = query.filter(or_(*condicoes)).order_by(
+            busca_texto.ordem_relevancia(Cliente.nome, busca),
+            Cliente.nome,
+            Cliente.id,
         )
-    
+    else:
+        query = query.order_by(Cliente.nome, Cliente.id)
+
     return query.offset(skip).limit(limit).all()
 
 

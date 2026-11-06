@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft, FileText, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -8,6 +8,7 @@ import { ClienteAutocomplete } from '../components/financeiro/ClienteAutocomplet
 import { ExtratoClienteDialog } from '../components/financeiro/ExtratoClienteDialog';
 import { FiltrosVendasCard, ValoresFiltro } from '../components/financeiro/FiltrosVendasCard';
 import { ClienteResumo, RecebimentoModal } from '../components/financeiro/RecebimentoModal';
+import { RelatorioClienteDialog } from '../components/financeiro/RelatorioClienteDialog';
 import { apiClient } from '../services/api';
 import {
   Cliente,
@@ -67,6 +68,13 @@ export const FinanceiroPage: React.FC = () => {
   const [clienteModal, setClienteModal] = useState<ClienteResumo | null>(null);
   const [vendaModal, setVendaModal] = useState<number | null>(null);
   const [clienteExtrato, setClienteExtrato] = useState<number | null>(null);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
+  const [clienteRelatorio, setClienteRelatorio] = useState<ClienteResumo | null>(null);
+
+  const abrirRelatorio = (cliente: ClienteResumo | null = null) => {
+    setClienteRelatorio(cliente);
+    setRelatorioAberto(true);
+  };
 
   const atualizar = useCallback(() => setVersao((v) => v + 1), []);
 
@@ -153,9 +161,14 @@ export const FinanceiroPage: React.FC = () => {
               <p className="text-sm text-gray-600">Títulos, recebimentos e extrato por cliente.</p>
             </div>
           </div>
-          <Button className="bg-sky-600 hover:bg-sky-700" onClick={() => abrirModal()}>
-            <Plus className="w-4 h-4 mr-2" />Registrar recebimento
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => abrirRelatorio()}>
+              <FileText className="w-4 h-4 mr-2" />Relatório por cliente
+            </Button>
+            <Button className="bg-sky-600 hover:bg-sky-700" onClick={() => abrirModal()}>
+              <Plus className="w-4 h-4 mr-2" />Registrar recebimento
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -352,6 +365,16 @@ export const FinanceiroPage: React.FC = () => {
           setClienteExtrato(null);
           abrirModal(cliente);
         }}
+        onRelatorio={(cliente) => {
+          setClienteExtrato(null);
+          abrirRelatorio(cliente);
+        }}
+      />
+
+      <RelatorioClienteDialog
+        aberto={relatorioAberto}
+        clienteInicial={clienteRelatorio}
+        onFechar={() => setRelatorioAberto(false)}
       />
     </div>
   );

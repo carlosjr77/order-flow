@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, MessageCircle, Plus } from 'lucide-react';
+import { Download, FileText, MessageCircle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ interface ExtratoClienteDialogProps {
   onFechar: () => void;
   onAlterado: () => void;
   onReceber: (cliente: { id: number; nome: string }) => void;
+  onRelatorio: (cliente: { id: number; nome: string }) => void;
 }
 
 const Cartao: React.FC<{ titulo: string; valor: string; destaque?: string }> = ({ titulo, valor, destaque = 'text-slate-900' }) => (
@@ -37,6 +38,7 @@ export const ExtratoClienteDialog: React.FC<ExtratoClienteDialogProps> = ({
   onFechar,
   onAlterado,
   onReceber,
+  onRelatorio,
 }) => {
   const { isAdmin } = useAuth();
   const [extrato, setExtrato] = useState<ExtratoCliente | null>(null);
@@ -128,6 +130,9 @@ export const ExtratoClienteDialog: React.FC<ExtratoClienteDialogProps> = ({
               </Button>
               <Button variant="outline" onClick={() => void enviarWhatsApp()}>
                 <MessageCircle className="w-4 h-4 mr-2" />Enviar por WhatsApp
+              </Button>
+              <Button variant="outline" onClick={() => onRelatorio({ id: extrato.cliente.id, nome: extrato.cliente.nome })}>
+                <FileText className="w-4 h-4 mr-2" />Relatório por período
               </Button>
             </div>
 
