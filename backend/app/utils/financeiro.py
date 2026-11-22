@@ -10,7 +10,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable, Optional, Sequence
 
 from fastapi import HTTPException, status as http_status
-from sqlalchemy import Date, and_, cast, func, or_, select
+from sqlalchemy import Date, and_, case, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Cliente, NFe, Recebimento, RecebimentoAlocacao, Venda
@@ -599,6 +599,57 @@ def buscar_titulos(
             "valor_pago": centavos(soma_pago),
             "saldo": centavos(soma_saldo),
         },
+    }
+
+
+def resumo_devedores(db: Session, limite: int = 5) -> dict:
+    """Total em aberto e os clientes que mais devem (vendas não canceladas com saldo)."""
+    pagos = _pagos_subquery()
+    saldo = Venda.valor_total - func.coalesce(pagos.c.pago, 0)
+    vencido = and_(Venda.data_vencimento.isnot(None), Venda.data_vencimento < hoje())
+    nome = func.coalesce(Cliente.nome, Venda.nome_cliente, "Sem cliente")
+    filtros = [Venda.deleted_at.is_(None), Venda.status != "cancelado", saldo > 0]
+
+    def _com_joins(consulta):
+        return (
+            consulta.select_from(Venda)
+            .outerjoin(Cliente, Cliente.id == Venda.cliente_id)
+            .outerjoin(pagos, pagos.c.venda_id == Venda.id)
+            .where(*filtros)
+        )
+
+    total_saldo, total_titulos, total_vencido = db.execute(_com_joins(select(
+        func.coalesce(func.sum(saldo), 0),
+        func.count(Venda.id),
+        func.coalesce(func.sum(case((vencido, saldo), else_=0)), 0),
+    ))).one()
+
+    linhas = db.execute(
+        _com_joins(select(
+            Venda.cliente_id, nome, func.sum(saldo), func.count(Venda.id),
+            func.coalesce(func.sum(case((vencido, saldo), else_=0)), 0),
+            func.min(Venda.data_vencimento),
+        ))
+        .group_by(Venda.cliente_id, nome)
+        .order_by(func.sum(saldo).desc())
+        .limit(limite)
+    ).all()
+
+    return {
+        "total_saldo": centavos(total_saldo),
+        "total_vencido": centavos(total_vencido),
+        "titulos": total_titulos,
+        "clientes": [
+            {
+                "cliente_id": cliente_id,
+                "cliente_nome": cliente_nome,
+                "saldo": centavos(soma),
+                "vencido": centavos(soma_vencida),
+                "titulos": qtd,
+                "vencimento_mais_antigo": vencimento,
+            }
+            for cliente_id, cliente_nome, soma, qtd, soma_vencida, vencimento in linhas
+        ],
     }
 
 

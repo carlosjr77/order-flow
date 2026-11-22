@@ -96,6 +96,16 @@ def listar_titulos(
     )
 
 
+@router.get("/devedores")
+def listar_devedores(
+    limite: int = Query(default=5, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Total em aberto e os clientes com maior saldo devedor"""
+    return financeiro.resumo_devedores(db, limite=limite)
+
+
 @router.post("/recebimentos", status_code=status.HTTP_201_CREATED)
 def criar_recebimento(
     dados: RecebimentoCriar,

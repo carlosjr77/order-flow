@@ -414,3 +414,23 @@ class AuditLogFilter(BaseModel):
     user_id: Optional[int] = None
     data_inicio: Optional[datetime] = None
     data_fim: Optional[datetime] = None
+
+
+OrigemCusto = Literal["manual", "ceasa_sem_nf", "nf"]
+
+
+class CustoProdutoUpdate(BaseModel):
+    preco_custo: float = Field(ge=0, le=99999999.99)
+    origem: OrigemCusto = "manual"
+    observacao: Optional[str] = Field(default=None, max_length=255)
+
+
+class CustoLoteItem(BaseModel):
+    produto_id: int = Field(gt=0)
+    preco_custo: float = Field(ge=0, le=99999999.99)
+
+
+class CustoLoteUpdate(BaseModel):
+    itens: list[CustoLoteItem] = Field(min_length=1, max_length=200)
+    origem: OrigemCusto = "ceasa_sem_nf"
+    observacao: Optional[str] = Field(default=None, max_length=255)

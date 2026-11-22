@@ -1,0 +1,6 @@
+﻿Grupo;Código;Produto;Unidade;Qtde no período;Média/dia;Pedidos;Estoque atual;Custo atual;Sugestão de compra
+laranja;LAR-KG;Laranja Pera;KG;79,7;11,386;13;35;2,2;44,702
+laranja;LAR-CX;Laranja Lima Caixa;CX;10;1,429;10;1;42;10
+laranja;LAR-SC;Laranja Pera Saca 20kg;SC;8;1,143;8;2;40;5
+limão;LIM-KG;Limão Taiti;KG;22,3;3,186;11;12;3,4;10,302
+limão;LIM-SC;Limão Taiti Saca 20kg;SC;8;1,143;8;0;55;9

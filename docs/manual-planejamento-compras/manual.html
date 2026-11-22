@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Manual - Planejamento de Compras</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm; }
+  :root { --verde: #0f766e; --texto: #0f172a; --suave: #475569; --linha: #e2e8f0; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--texto); font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 24pt; margin: 0 0 4px; color: var(--verde); }
+  h2 { font-size: 15pt; color: var(--verde); border-bottom: 2px solid var(--verde); padding-bottom: 4px; margin: 0 0 10px; break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 6px; break-after: avoid; }
+  p, li { color: var(--texto); }
+  .sub { color: var(--suave); }
+  .capa { height: 255mm; display: flex; flex-direction: column; justify-content: center; }
+  .capa .linha { width: 70px; height: 5px; background: var(--verde); margin: 18px 0; }
+  section { break-before: page; }
+  ol.passos { padding-left: 20px; }
+  ol.passos li { margin-bottom: 4px; }
+  figure { margin: 10px 0 14px; break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid var(--linha); border-radius: 6px; }
+  figure.estreita img { width: 38%; display: block; margin: 0 auto; }
+  figure.media img { width: 80%; display: block; margin: 0 auto; }
+  figcaption { font-size: 8.5pt; color: var(--suave); text-align: center; margin-top: 4px; }
+  .dica { background: #f0fdfa; border-left: 4px solid var(--verde); padding: 8px 12px; margin: 10px 0; break-inside: avoid; }
+  .atencao { background: #fffbeb; border-left: 4px solid #d97706; padding: 8px 12px; margin: 10px 0; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9.5pt; break-inside: avoid; }
+  th, td { border: 1px solid var(--linha); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #f8fafc; }
+  .sumario li { margin-bottom: 3px; }
+  code { background: #f1f5f9; padding: 0 4px; border-radius: 3px; font-size: 9pt; }
+</style>
+</head>
+<body>
+
+<div class="capa">
+  <p class="sub">OrderFlow · Manual do usuário</p>
+  <h1>Planejamento de Compras</h1>
+  <div class="linha"></div>
+  <p style="font-size:12pt">Como ver o que saiu em cada período, montar a lista de compras do CEASA, comparar as
+  variações de um produto (quilo, saca, caixa) nas tabelas de preço, lançar o custo quando ainda não há nota fiscal
+  e acompanhar quem está devendo.</p>
+  <p class="sub" style="margin-top:30px">Versão de 22/11/2026. Os prints usam dados fictícios de demonstração.</p>
+  <h3 style="margin-top:40px">Conteúdo</h3>
+  <ol class="sumario">
+    <li>Onde fica a nova tela</li>
+    <li>Consolidado do período: o que saiu</li>
+    <li>Sugestão de compra e lista em PDF/planilha</li>
+    <li>Variações e preços por tabela</li>
+    <li>Atualizar o custo de um produto</li>
+    <li>Atualizar vários custos de uma vez (CEASA sem nota)</li>
+    <li>Débitos de clientes</li>
+    <li>Outras melhorias: busca sem acento, unidade saca e lucro correto</li>
+    <li>Perguntas frequentes</li>
+  </ol>
+</div>
+
+<section>
+  <h2>1. Onde fica a nova tela</h2>
+  <ol class="passos">
+    <li>Entre no OrderFlow normalmente.</li>
+    <li>No painel inicial, clique no cartão <b>Planejamento de Compras</b> (destacado no print abaixo).</li>
+    <li>A tela abre com três abas: <b>Consolidado do período</b>, <b>Variações e preços</b> e <b>Atualizar custos</b>.
+      À direita fica sempre o quadro <b>Débitos de clientes</b>.</li>
+  </ol>
+  <figure><img src="img/01-dashboard.png"><figcaption>Painel inicial com o novo cartão "Planejamento de Compras".</figcaption></figure>
+  <figure><img src="img/02-tela-inicial.png"><figcaption>Tela de Planejamento de Compras ao abrir.</figcaption></figure>
+</section>
+
+<section>
+  <h2>2. Consolidado do período: o que saiu</h2>
+  <p>Mostra a soma de tudo o que saiu nos pedidos de um período, produto por produto, separado por unidade.</p>
+  <ol class="passos">
+    <li>Em <b>Produtos</b>, digite um ou mais nomes separados por vírgula. Exemplo: <code>laranja, limão</code>.
+      Para ver todos os produtos, deixe em branco.</li>
+    <li>Em <b>Período</b>, escolha um atalho (<i>Últimos 7 dias</i>, <i>15 dias</i>, <i>30 dias</i>, <i>Mês atual</i>)
+      ou digite as datas em <b>De</b> e <b>Até</b>.</li>
+    <li>Se quiser, filtre por uma <b>Tabela de preço</b> (ex.: só pedidos de Restaurantes) ou marque
+      <b>Incluir pedidos cancelados</b>.</li>
+    <li>Clique em <b>Consultar</b>.</li>
+  </ol>
+  <figure><img src="img/03-consolidado-termos.png"><figcaption>Consolidado de "laranja, limão" nos últimos 7 dias.</figcaption></figure>
+</section>
+
+<section>
+  <h3>Como ler o resultado</h3>
+  <ul>
+    <li><b>Indicadores no topo:</b> quantidade de pedidos, produtos diferentes, faturamento, custo e lucro bruto do período.</li>
+    <li><b>Um quadro por produto pesquisado</b> (Laranja, Limão...). No título aparecem os totais <b>por unidade</b>:
+      por exemplo, <i>KG 79,7 · CX 10 · SC 8</i>. Quilo, caixa e saca <b>nunca são somados entre si</b>.</li>
+    <li><b>Colunas da tabela:</b>
+      <table>
+        <tr><th>Coluna</th><th>Significado</th></tr>
+        <tr><td>Saiu</td><td>Quantidade total vendida no período.</td></tr>
+        <tr><td>Média/dia</td><td>Saiu ÷ número de dias do período.</td></tr>
+        <tr><td>Pedidos</td><td>Em quantos pedidos o produto apareceu.</td></tr>
+        <tr><td>Estoque</td><td>Estoque atual cadastrado.</td></tr>
+        <tr><td>Custo atual</td><td>Preço de custo cadastrado hoje.</td></tr>
+        <tr><td>Comprar</td><td>Sugestão de compra, que você pode alterar (ver capítulo 3).</td></tr>
+        <tr><td>✏️ (lápis)</td><td>Atualizar o custo desse produto (ver capítulo 5).</td></tr>
+      </table>
+    </li>
+  </ul>
+  <figure><img src="img/04-grupo-laranja.png"><figcaption>Detalhe do grupo Laranja: quilo, caixa e saca separados.</figcaption></figure>
+  <div class="dica"><b>Qual data é usada?</b> A mesma regra do Relatório de Vendas: a <b>data de entrega</b> do pedido
+    e, quando não houver, a data em que o pedido foi feito. Pedidos excluídos nunca entram; cancelados só entram se
+    você marcar a opção.</div>
+  <p>Deixando o campo de produtos em branco, a tela agrupa pela primeira palavra do nome (todas as "Laranja ..." juntas,
+    todas as "Batata ..." juntas):</p>
+  <figure><img src="img/06-consolidado-30-dias.png"><figcaption>Todos os produtos dos últimos 30 dias.</figcaption></figure>
+</section>
+
+<section>
+  <h2>3. Sugestão de compra e lista em PDF/planilha</h2>
+  <ol class="passos">
+    <li>Depois de consultar, informe em <b>Comprar para quantos dias?</b> o tempo até a próxima compra (ex.: 7).</li>
+    <li>Deixe marcado <b>Descontar o estoque atual</b> para a sugestão abater o que você já tem.</li>
+    <li>A coluna <b>Comprar</b> é calculada assim: <b>média por dia × dias − estoque</b>.
+      Saca, caixa e unidade são arredondadas para cima (não existe meia caixa); quilo fica com casas decimais.</li>
+    <li>Se quiser outra quantidade, <b>digite direto na coluna Comprar</b>. O valor digitado vale para o PDF e a planilha.</li>
+    <li>Clique em <b>Lista de compras (PDF)</b> para levar ao CEASA, ou em <b>Planilha (CSV)</b> para abrir no Excel.
+      Marque <b>No PDF, só itens a comprar</b> para esconder os itens com sugestão zero.</li>
+  </ol>
+  <figure><img src="img/05-barra-sugestao.png"><figcaption>Opções da sugestão e botões de exportação.</figcaption></figure>
+  <div class="dica">Junto com este manual há um exemplo dos dois arquivos: <code>exemplo-lista-compras.pdf</code> e
+    <code>exemplo-lista-compras.csv</code>. A planilha usa ponto e vírgula e abre direto no Excel em português.</div>
+  <div class="atencao">Os ajustes digitados na coluna <b>Comprar</b> não ficam salvos no sistema. Se você consultar de
+    novo, a sugestão volta ao cálculo automático. Gere o PDF antes de mudar os filtros.</div>
+</section>
+
+<section>
+  <h2>4. Variações e preços por tabela</h2>
+  <p>Mostra todas as versões cadastradas de um produto (quilo, saca, caixa, unidade) e quanto cada uma custa em
+    <b>cada tabela de preço ativa</b>. Use para conferir preços antes de passar um orçamento.</p>
+  <ol class="passos">
+    <li>Clique na aba <b>Variações e preços</b>.</li>
+    <li>Digite os produtos separados por vírgula (ex.: <code>laranja, limão, tomate</code>) e clique em <b>Buscar</b>.</li>
+    <li>Cada quadro mostra quantos produtos existem por unidade e o estoque somado de cada unidade.</li>
+    <li>As colunas com o nome das tabelas (Atacado, Restaurantes, Varejo...) mostram o preço de venda calculado a
+      partir do custo atual.</li>
+  </ol>
+  <figure><img src="img/08-variacoes.png"><figcaption>Variações de laranja, limão e tomate com o preço em cada tabela.</figcaption></figure>
+  <div class="dica">A marca <b>exc</b> ao lado de um preço indica que aquele produto tem uma <b>margem própria</b>
+    (exceção) naquela tabela. Sem a marca, vale a margem geral da tabela. Passe o mouse sobre o preço para ver a margem.</div>
+</section>
+
+<section>
+  <h2>5. Atualizar o custo de um produto</h2>
+  <p>Use quando o preço de compra mudou e você ainda não tem a nota fiscal.</p>
+  <ol class="passos">
+    <li>Em qualquer tabela da tela, clique no <b>lápis ✏️</b> da linha do produto.</li>
+    <li>Digite o <b>Novo custo</b> por unidade do produto (ex.: por quilo, por saca). Aceita <code>3,50</code> ou <code>3.50</code>.</li>
+    <li>Escolha a <b>Origem</b>: <i>CEASA / sem nota</i>, <i>Ajuste manual</i> ou <i>Nota fiscal</i>.</li>
+    <li>Se quiser, escreva uma <b>Observação</b> (ex.: "Box 12, nota chega sexta").</li>
+    <li>Clique em <b>Salvar custo</b>.</li>
+  </ol>
+  <figure class="media"><img src="img/07-dialog-custo.png"><figcaption>Janela de atualização de custo com o histórico.</figcaption></figure>
+  <ul>
+    <li>Na parte de baixo da janela aparecem as <b>últimas alterações</b>: data, origem, observação, quem alterou e
+      o valor de/para.</li>
+    <li>Toda alteração também fica registrada em <b>Logs do Sistema</b> (auditoria).</li>
+    <li>Alterar o custo pela tela de <b>Produtos</b> (botão editar) também grava o histórico, com origem "Ajuste manual".</li>
+  </ul>
+  <div class="atencao"><b>O que muda ao trocar o custo:</b> os preços das tabelas (e do PDV) passam a ser calculados com o
+    custo novo. <b>Os pedidos já feitos não mudam</b>: o lucro deles continua calculado com o custo do dia da venda
+    (ver capítulo 8).</div>
+</section>
+
+<section>
+  <h2>6. Atualizar vários custos de uma vez (CEASA sem nota)</h2>
+  <p>Ideal para usar ao voltar do CEASA: você lança o custo de todos os itens comprados de uma só vez.</p>
+  <ol class="passos">
+    <li>Clique na aba <b>Atualizar custos</b>.</li>
+    <li>Digite os produtos (ex.: <code>laranja, limão</code>) e clique em <b>Buscar produtos</b>.</li>
+    <li>Na coluna <b>Novo custo (R$)</b>, preencha <b>só os produtos que mudaram</b>. Os que ficarem em branco não são alterados.</li>
+    <li>Escolha a <b>Origem</b> (o padrão é <i>CEASA / sem nota</i>) e, se quiser, uma <b>Observação</b>, que vale para todos.</li>
+    <li>Clique em <b>Salvar custo(s)</b>. O botão mostra quantos serão salvos.</li>
+  </ol>
+  <figure><img src="img/09-custos-lote-preenchido.png"><figcaption>Dois custos preenchidos, prontos para salvar.</figcaption></figure>
+  <figure><img src="img/10-custos-lote-salvo.png"><figcaption>Confirmação após salvar.</figcaption></figure>
+  <div class="dica">Se algum valor estiver inválido, o campo fica com borda vermelha e o botão de salvar é bloqueado.
+    O salvamento é "tudo ou nada": se der erro em um produto, nenhum é alterado.</div>
+</section>
+
+<section>
+  <h2>7. Débitos de clientes</h2>
+  <p>O quadro à direita lembra quem está devendo enquanto você planeja a compra.</p>
+  <ul>
+    <li><b>Em aberto:</b> soma do saldo de todos os pedidos não pagos (cancelados não contam).</li>
+    <li><b>Vencido:</b> a parte desse saldo com vencimento já passado.</li>
+    <li>Abaixo, os <b>5 clientes que mais devem</b>, com a quantidade de títulos, quanto está vencido e o vencimento mais antigo.</li>
+  </ul>
+  <ol class="passos">
+    <li>Clique no nome de um cliente para abrir o <b>extrato</b> dele (o mesmo da tela Financeiro), com opção de PDF e WhatsApp.</li>
+    <li>Para registrar um pagamento, clique em <b>Ver no Financeiro</b>.</li>
+  </ol>
+  <figure class="estreita"><img src="img/11-debitos.png"><figcaption>Quadro de débitos de clientes.</figcaption></figure>
+  <figure><img src="img/12-extrato-cliente.png"><figcaption>Extrato do cliente aberto a partir do quadro.</figcaption></figure>
+</section>
+
+<section>
+  <h2>8. Outras melhorias</h2>
+  <h3>Busca de produtos sem acento</h3>
+  <p>Em <b>Gestão de Produtos</b> (e em todas as telas que buscam produtos), maiúsculas e acentos não importam mais:
+    <code>limao</code> encontra "Limão", <code>maca</code> encontra "Maçã". Os nomes que <b>começam</b> com o que você
+    digitou aparecem primeiro.</p>
+  <figure><img src="img/13-produtos-busca-sem-acento.png"><figcaption>Busca "limao" encontrando "Limão".</figcaption></figure>
+
+  <h3>Unidade saca (SC)</h3>
+  <p>O cadastro de produtos tem a opção <b>SC (saca)</b>. Ao importar notas e pedidos na sugestão de tabela de preço,
+    as palavras "saca", "sacas", "saco" e "sacos" passam a ser entendidas como <b>SC</b>, e não mais como unidade.</p>
+
+  <h3>Lucro correto mesmo depois de mudar o custo</h3>
+  <p>Cada pedido novo passa a guardar o <b>custo do produto no dia da venda</b>. Assim, o lucro mostrado no
+    <b>Relatório de Vendas</b> e no consolidado não muda quando você atualiza o custo depois.</p>
+  <table>
+    <tr><th>Exemplo</th><th>Antes</th><th>Agora</th></tr>
+    <tr><td>Dia 01: vende 10 kg de limão a R$ 5,00 com custo R$ 3,00</td><td>Lucro R$ 20,00</td><td>Lucro R$ 20,00</td></tr>
+    <tr><td>Dia 10: custo sobe para R$ 4,50 e você reabre o relatório do dia 01</td><td>Lucro passava a R$ 5,00 ❌</td><td>Continua R$ 20,00 ✅</td></tr>
+  </table>
+  <ul>
+    <li>Ao <b>editar</b> um pedido, os produtos que já estavam nele mantêm o custo original; produtos novos entram com o custo do dia.</li>
+    <li>Pedidos feitos <b>antes desta atualização</b> não têm o custo guardado e continuam usando o custo atual, como antes.</li>
+  </ul>
+  <figure><img src="img/14-relatorio-vendas.png"><figcaption>Relatório de Vendas: o custo e o lucro passam a usar o custo do dia da venda.</figcaption></figure>
+</section>
+
+<section>
+  <h2>9. Perguntas frequentes</h2>
+  <h3>Por que quilo e saca aparecem separados?</h3>
+  <p>Porque o sistema não sabe quantos quilos tem cada saca de cada produto (laranja e batata têm pesos diferentes).
+    Somar os dois daria um número errado. Por isso os totais vêm sempre por unidade.</p>
+  <h3>O consolidado bate com o Relatório de Vendas?</h3>
+  <p>Sim, desde que use o mesmo período e o mesmo tratamento de cancelados: os dois usam a data de entrega
+    (ou a data do pedido, quando não há entrega).</p>
+  <h3>Até quantos dias posso consultar?</h3>
+  <p>Até 366 dias por consulta, e até 10 produtos separados por vírgula.</p>
+  <h3>Lancei o custo errado. Como desfaço?</h3>
+  <p>Lance de novo o valor correto. O histórico guarda as duas alterações, e os pedidos feitos nesse meio tempo ficam
+    com o custo que estava valendo na hora.</p>
+  <h3>Mudar o custo altera os preços de venda?</h3>
+  <p>Sim, para as próximas vendas. As tabelas calculam o preço como <i>custo × (1 + margem)</i>, então um custo maior
+    gera um preço maior. Só nas vendas feitas <b>sem tabela de preço</b> é que um produto com <b>preço de venda fixo</b>
+    no cadastro continua com o preço fixo.</p>
+  <h3>Quem pode usar a tela?</h3>
+  <p>Todo usuário logado (administrador ou operador), igual à tela de Produtos.</p>
+</section>
+
+</body>
+</html>

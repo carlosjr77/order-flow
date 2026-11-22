@@ -12,6 +12,12 @@ import {
   RecebimentoFinanceiro,
   RelatorioCliente,
   TipoDataFiltro,
+  ConsolidadoProdutos,
+  FiltrosConsolidado,
+  HistoricoCusto,
+  OrigemCusto,
+  ProdutosAgrupados,
+  ResumoDevedores,
 } from '../types';
 
 // API Configuration
@@ -118,6 +124,43 @@ export class APIClient {
     params.append('limit', limit.toString());
     if (busca) params.append('busca', busca);
     return this.request(`/api/produtos?${params}`, 'GET');
+  }
+
+  async listarProdutosAgrupados(termo: string): Promise<ProdutosAgrupados> {
+    return this.request(`/api/produtos/agrupado?${new URLSearchParams({ termo })}`, 'GET');
+  }
+
+  async atualizarCustoProduto(id: number, precoCusto: number, origem: OrigemCusto, observacao?: string) {
+    return this.request(`/api/produtos/${id}/custo`, 'PATCH', {
+      preco_custo: precoCusto,
+      origem,
+      observacao: observacao || null,
+    });
+  }
+
+  async atualizarCustosEmLote(
+    itens: { produto_id: number; preco_custo: number }[],
+    origem: OrigemCusto,
+    observacao?: string
+  ): Promise<{ alterados: number; sem_alteracao: number; historico: HistoricoCusto[] }> {
+    return this.request('/api/produtos/custos/lote', 'POST', { itens, origem, observacao: observacao || null });
+  }
+
+  async listarHistoricoCusto(id: number, limite = 20): Promise<HistoricoCusto[]> {
+    return this.request(`/api/produtos/${id}/custo/historico?limite=${limite}`, 'GET');
+  }
+
+  async consolidadoProdutos(filtros: FiltrosConsolidado): Promise<ConsolidadoProdutos> {
+    const params = new URLSearchParams({ data_inicio: filtros.data_inicio, data_fim: filtros.data_fim });
+    if (filtros.termo?.trim()) params.append('termo', filtros.termo.trim());
+    if (filtros.cliente_id) params.append('cliente_id', String(filtros.cliente_id));
+    if (filtros.tabela_preco_id) params.append('tabela_preco_id', String(filtros.tabela_preco_id));
+    if (filtros.incluir_canceladas) params.append('incluir_canceladas', 'true');
+    return this.request(`/api/vendas/consolidado-produtos?${params}`, 'GET');
+  }
+
+  async resumoDevedores(limite = 5): Promise<ResumoDevedores> {
+    return this.request(`/api/financeiro/devedores?limite=${limite}`, 'GET');
   }
 
   async obterProduto(id: number) {
