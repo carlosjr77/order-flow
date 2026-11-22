@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Literal, Optional
 from datetime import date, datetime
@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.routes.auth import get_current_user
 from app.models import Cliente, Venda, ItemVenda, Produto, Usuario
 from app.schemas import VendaCreate, VendaUpdate, VendaResponse, VendaDetailResponse
-from app.utils import financeiro
+from app.utils import consolidado_compras, financeiro
 from app.utils.audit import registrar_auditoria, get_client_ip
 
 router = APIRouter(prefix="/api/vendas", tags=["Vendas"])
@@ -45,6 +45,13 @@ def auditar_cliente_criado(db: Session, request: Request, cliente: Optional[Clie
         user_name=(usuario.nome or usuario.username) if usuario else "sistema",
         ip_address=get_client_ip(request),
     )
+
+
+def custo_do_item(item: ItemVenda, produto: Optional[Produto]) -> float:
+    """Custo congelado na venda; itens antigos (sem custo gravado) usam o custo atual do produto."""
+    if item.custo_unitario is not None:
+        return float(item.custo_unitario)
+    return float(produto.preco_custo) if produto and produto.preco_custo else 0
 
 
 def venda_to_dict(venda: Venda, db: Session) -> dict:
@@ -131,7 +138,7 @@ def listar_vendas(
             item_dict['descricao'] = produto.descricao if produto else f'Produto {item.produto_id}'
             item_dict['unidade_medida'] = produto.unidade_medida if produto else 'UN'
             item_dict['ncm'] = produto.ncm if produto else None
-            item_dict['preco_custo'] = float(produto.preco_custo) if produto and produto.preco_custo else 0
+            item_dict['preco_custo'] = custo_do_item(item, produto)
 
         itens_por_venda.setdefault(item.venda_id, []).append(item_dict)
     
@@ -146,6 +153,29 @@ def listar_vendas(
         })
     
     return resultado
+
+
+@router.get("/consolidado-produtos")
+def consolidado_produtos(
+    data_inicio: date,
+    data_fim: date,
+    termo: Optional[str] = Query(default=None, max_length=300),
+    cliente_id: Optional[int] = None,
+    tabela_preco_id: Optional[int] = None,
+    incluir_canceladas: bool = False,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """Soma do que saiu por produto no período (data de entrega ou, sem ela, data do pedido)"""
+    return consolidado_compras.consolidado_produtos(
+        db,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        termo=termo,
+        cliente_id=cliente_id,
+        tabela_preco_id=tabela_preco_id,
+        incluir_canceladas=incluir_canceladas,
+    )
 
 
 @router.get("/{venda_id}", response_model=VendaDetailResponse)
@@ -187,7 +217,7 @@ def obter_venda(
         item_dict['descricao'] = produto.descricao
         item_dict['unidade_medida'] = produto.unidade_medida
         item_dict['ncm'] = produto.ncm
-        item_dict['preco_custo'] = float(produto.preco_custo) if produto.preco_custo else 0
+        item_dict['preco_custo'] = custo_do_item(item, produto)
         itens_formatados.append(item_dict)
     
     valor_pago = financeiro.mapa_pagos(db, [venda.id]).get(venda.id, financeiro.ZERO)
@@ -272,7 +302,8 @@ def criar_venda(
             produto_id=item.produto_id,
             quantidade=Decimal(str(item.quantidade)),
             valor_unitario=Decimal(str(item.valor_unitario)),
-            valor_total=valor_total_item
+            valor_total=valor_total_item,
+            custo_unitario=produto.preco_custo
         )
         
         db.add(item_venda)
@@ -546,6 +577,12 @@ def editar_venda(
     for produto in db.query(Produto).filter(Produto.id.in_(produtos_ids)).all():
         produtos_dict[produto.id] = produto
     
+    # Na edição, o produto que já estava na venda mantém o custo da época
+    custo_original: dict[int, Decimal] = {}
+    for item in itens_originais:
+        if item.custo_unitario is not None:
+            custo_original.setdefault(item.produto_id, item.custo_unitario)
+
     # 1. Reverter estoque dos itens originais
     for item in itens_originais:
         produto = produtos_dict.get(item.produto_id)
@@ -594,7 +631,8 @@ def editar_venda(
             produto_id=item.produto_id,
             quantidade=quantidade,
             valor_unitario=valor_unitario,
-            valor_total=valor_total_item
+            valor_total=valor_total_item,
+            custo_unitario=custo_original.get(item.produto_id, produto.preco_custo)
         )
         
         db.add(item_venda)

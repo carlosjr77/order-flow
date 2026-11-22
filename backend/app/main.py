@@ -289,6 +289,16 @@ def run_migrations():
                 conn.execute(text("UPDATE empresas SET chave_pix = :chave"), {"chave": CHAVE_PIX_INICIAL})
                 conn.commit()
                 print("✅ Migração: coluna 'chave_pix' adicionada em 'empresas'")
+
+            # Custo congelado no item da venda (tabela produto_custo_historico vem do create_all)
+            result = conn.execute(text(
+                "SELECT COUNT(*) FROM information_schema.columns "
+                "WHERE table_name = 'itens_venda' AND column_name = 'custo_unitario'"
+            )).fetchone()
+            if result[0] == 0:
+                conn.execute(text("ALTER TABLE itens_venda ADD COLUMN custo_unitario NUMERIC(10,2)"))
+                conn.commit()
+                print("✅ Migração: coluna 'custo_unitario' adicionada em 'itens_venda'")
     except Exception as e:
         print(f"⚠️ Erro na migração: {e}")
 

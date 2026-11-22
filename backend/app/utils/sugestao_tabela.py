@@ -25,19 +25,12 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.models import Produto, TabelaPreco, TabelaPrecoItem
+from app.utils.unidades import UNIDADES_ALIASES, mapear_unidade
 
 _REGEX_PRECO = re.compile(r'(?:r\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+\.\d{2}|\d+,\d{2})', re.IGNORECASE)
 
-# Mapeia todas as variações de escrita para a unidade canônica usada no cadastro de produtos
-_UNIDADES_ALIASES = {
-    'kg': 'KG', 'kgs': 'KG', 'k': 'KG', 'kilo': 'KG', 'kilos': 'KG', 'quilo': 'KG', 'quilos': 'KG',
-    'g': 'G', 'grama': 'G', 'gramas': 'G',
-    'cx': 'CX', 'caixa': 'CX', 'caixas': 'CX',
-    'un': 'UN', 'und': 'UN', 'unid': 'UN', 'unidade': 'UN', 'unidades': 'UN',
-    'bj': 'UN', 'bandeja': 'UN', 'bandejas': 'UN', 'saco': 'UN', 'sacos': 'UN',
-    'pct': 'PCT', 'pacote': 'PCT', 'pacotes': 'PCT',
-    'lt': 'LT', 'l': 'LT', 'litro': 'LT', 'litros': 'LT',
-}
+# Variações de escrita -> unidade canônica do cadastro (inclui SC/saca)
+_UNIDADES_ALIASES = UNIDADES_ALIASES
 # Ordenado por tamanho decrescente para casar termos compostos (ex: "kilo") antes de abreviações ("k")
 _UNIDADE_TOKENS_ORDENADOS = sorted(_UNIDADES_ALIASES.keys(), key=len, reverse=True)
 _ALTERNATIVAS_UNIDADE = '|'.join(_UNIDADE_TOKENS_ORDENADOS)
@@ -83,9 +76,7 @@ _STOPWORDS_PALAVRA_PRINCIPAL = {"de", "do", "da", "das", "dos", "com", "sem", "e
 
 
 def _mapear_unidade(token: Optional[str]) -> Optional[str]:
-    if not token:
-        return None
-    return _UNIDADES_ALIASES.get(token.strip(' .').lower())
+    return mapear_unidade(token)
 
 
 def _parse_valor_monetario(valor_str: str) -> float:

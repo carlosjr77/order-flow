@@ -425,6 +425,7 @@ export const ProdutosPage: React.FC = () => {
                     <option>KG</option>
                     <option>LT</option>
                     <option>CX</option>
+                    <option value="SC">SC (saca)</option>
                   </select>
                 </div>
                 <div>

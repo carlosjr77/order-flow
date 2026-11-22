@@ -14,6 +14,8 @@ class ItemVenda(Base):
     quantidade = Column(Numeric(10, 3), nullable=False)
     valor_unitario = Column(Numeric(10, 2), nullable=False)
     valor_total = Column(Numeric(10, 2), nullable=False)
+    # Custo do produto no momento da venda. NULL em itens antigos: os relatórios usam o custo atual.
+    custo_unitario = Column(Numeric(10, 2), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     deleted_at = Column(DateTime, nullable=True)  # Exclusão lógica

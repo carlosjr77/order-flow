@@ -356,3 +356,115 @@ export interface SugestaoTabelaResponse {
   tabelas_analisadas: TabelaAnalisadaSugestao[];
   comparativo: ItemComparativoSugestao[];
 }
+
+// ---------------------------------------------------------------- Planejamento de compras
+
+export type OrigemCusto = 'manual' | 'ceasa_sem_nf' | 'nf';
+
+export interface PrecoNaTabela {
+  tabela_preco_id: number;
+  tabela_nome: string;
+  margem_percentual: number;
+  excecao: boolean;
+  preco: number;
+}
+
+export interface ProdutoAgrupadoItem {
+  produto_id: number;
+  codigo_interno: string;
+  descricao: string;
+  unidade_medida: string;
+  estoque_atual: number;
+  preco_custo: number;
+  preco_venda: number | null;
+  margem_lucro: number | null;
+  precos_tabelas: PrecoNaTabela[];
+}
+
+export interface GrupoProdutos {
+  termo: string;
+  total_produtos: number;
+  unidades: { unidade: string; produtos: number; estoque: number }[];
+  itens: ProdutoAgrupadoItem[];
+}
+
+export interface ProdutosAgrupados {
+  termos: string[];
+  termos_sem_resultado: string[];
+  grupos: GrupoProdutos[];
+  limite_atingido: boolean;
+}
+
+export interface ItemConsolidado {
+  produto_id: number;
+  codigo_interno: string;
+  descricao: string;
+  unidade_medida: string;
+  quantidade: number;
+  media_diaria: number;
+  pedidos: number;
+  faturamento: number;
+  custo: number;
+  lucro: number;
+  estoque_atual: number;
+  preco_custo_atual: number;
+  primeira_saida: string | null;
+  ultima_saida: string | null;
+}
+
+export interface SubtotalUnidade {
+  unidade: string;
+  produtos: number;
+  quantidade: number;
+  media_diaria: number;
+  faturamento: number;
+  custo: number;
+}
+
+export interface GrupoConsolidado {
+  termo: string;
+  subtotais_por_unidade: SubtotalUnidade[];
+  itens: ItemConsolidado[];
+}
+
+export interface ConsolidadoProdutos {
+  periodo: { data_inicio: string; data_fim: string; dias: number; criterio_data: string };
+  termos: string[];
+  termos_sem_resultado: string[];
+  totais: { pedidos: number; produtos: number; faturamento: number; custo: number; lucro: number };
+  grupos: GrupoConsolidado[];
+}
+
+export interface FiltrosConsolidado {
+  data_inicio: string;
+  data_fim: string;
+  termo?: string;
+  cliente_id?: number;
+  tabela_preco_id?: number;
+  incluir_canceladas?: boolean;
+}
+
+export interface HistoricoCusto {
+  id: number;
+  produto_id: number;
+  custo_anterior: number;
+  custo_novo: number;
+  origem: OrigemCusto;
+  observacao: string | null;
+  usuario_nome: string | null;
+  created_at: string;
+}
+
+export interface ResumoDevedores {
+  total_saldo: number;
+  total_vencido: number;
+  titulos: number;
+  clientes: {
+    cliente_id: number | null;
+    cliente_nome: string;
+    saldo: number;
+    vencido: number;
+    titulos: number;
+    vencimento_mais_antigo: string | null;
+  }[];
+}
