@@ -5,7 +5,21 @@ import { Produto, DadosEmpresa } from '../types';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Edit2, Trash2, Search, Settings, Percent } from 'lucide-react';
+import { ArrowLeft, Plus, Edit2, Trash2, Search, Settings, Percent, Download, FileText, FileSpreadsheet } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  baixarArquivo,
+  buscarTodosProdutos,
+  gerarProdutosExcel,
+  gerarProdutosPdf,
+  montarLinhasProdutos,
+  nomeArquivoProdutos,
+} from '../utils/exportarProdutos';
 import { aplicarMascaraMoeda, extrairValorMoeda } from '../utils/formatacao';
 
 export const ProdutosPage: React.FC = () => {
@@ -41,6 +55,7 @@ export const ProdutosPage: React.FC = () => {
   // Estados para configuração de margem geral
   const [empresaDados, setEmpresaDados] = useState<DadosEmpresa | null>(null);
   const [showModalMargem, setShowModalMargem] = useState(false);
+  const [exportando, setExportando] = useState<'pdf' | 'xlsx' | null>(null);
   const [margemGeralFormatada, setMargemGeralFormatada] = useState('');
 
   useEffect(() => {
@@ -70,6 +85,31 @@ export const ProdutosPage: React.FC = () => {
       console.error('Erro ao carregar produtos:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Exporta todos os produtos cadastrados (só código e nome), independente da busca na tela.
+  const exportarProdutos = async (formato: 'pdf' | 'xlsx') => {
+    if (exportando) return;
+    setExportando(formato);
+    try {
+      const todos = await buscarTodosProdutos((skip, limit) => apiClient.listarProdutos(skip, limit));
+      const linhas = montarLinhasProdutos(todos);
+      if (linhas.length === 0) {
+        alert('Nenhum produto cadastrado para exportar.');
+        return;
+      }
+      const nomeArquivo = nomeArquivoProdutos(formato);
+      if (formato === 'pdf') {
+        gerarProdutosPdf(linhas, empresaDados?.nome).save(nomeArquivo);
+      } else {
+        baixarArquivo(await gerarProdutosExcel(linhas), nomeArquivo);
+      }
+    } catch (error) {
+      console.error('Erro ao exportar produtos:', error);
+      alert('Não foi possível exportar os produtos. Tente novamente.');
+    } finally {
+      setExportando(null);
     }
   };
 
@@ -194,6 +234,24 @@ export const ProdutosPage: React.FC = () => {
               <Percent className="w-4 h-4 mr-1" />
               Margem Geral: {margemGeralFormatada}%
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={exportando !== null}>
+                  <Download className="w-4 h-4 mr-1" />
+                  {exportando ? 'Exportando...' : 'Exportar'}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => void exportarProdutos('pdf')}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Todos os produtos em PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => void exportarProdutos('xlsx')}>
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Todos os produtos em Excel
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button onClick={() => { resetForm(); setShowModal(true); }} className="bg-blue-600 hover:bg-blue-700">
               <Plus className="w-4 h-4 mr-2" />
               Novo Produto
